@@ -1,6 +1,5 @@
 import contextlib
 import io
-import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -199,12 +198,32 @@ class WorkflowTests(unittest.TestCase):
             for n in (8, 9, 10)
         ]
         viewer = SimpleNamespace(workflow=workflow, windows=lambda: windows)
-        self.assertEqual(reusable_groups(viewer), ["G7:", "G8:", "G9:", "G10:"])
-        windows.pop()
-        self.assertIsNone(reusable_groups(viewer))
+        from unittest.mock import patch
 
-    def test_json_logging(self):
-        """Keep metadata and multiline exceptions within individual JSON records."""
+        with patch("gvu.viewer.job_count", return_value=1):
+            self.assertEqual(reusable_groups(viewer), ["G7:", "G8:", "G9:", "G10:"])
+        windows.pop()
+        with patch("gvu.viewer.job_count", return_value=1):
+            self.assertIsNone(reusable_groups(viewer))
+
+    def test_linked_reuse(self):
+        """Retain both linked source groups when reusing a mapped workflow."""
+        source = Path("/runs/linked.log")
+        surface = Surface("state", density=Path("/density.cube"), potential=Path("/potential.cube"))
+        workflow = Workflow(source, surfaces=(surface,))
+        windows = [
+            {"kCGWindowName": f"G2:M1:V1 - linked.log ({source})"},
+            {"kCGWindowName": f"G3:M1:V1 - linked.log ({source})"},
+            {"kCGWindowName": "G4:M1:V1 - Density ( isoval = 0.002 ; [mapped with ESP] )"},
+        ]
+        viewer = SimpleNamespace(workflow=workflow, windows=lambda: windows)
+        from unittest.mock import patch
+
+        with patch("gvu.viewer.job_count", return_value=2):
+            self.assertEqual(reusable_groups(viewer), ["G2:", "G3:", "G4:"])
+
+    def test_text_logging(self):
+        """Format readable metadata and standard multiline tracebacks."""
         stream = io.StringIO()
         with contextlib.redirect_stderr(stream):
             configure_logging()
@@ -214,10 +233,13 @@ class WorkflowTests(unittest.TestCase):
                 raise RuntimeError("multiline\nerror")
             except RuntimeError:
                 LOG.error("failed", exc_info=True)
-        records = [json.loads(line) for line in stream.getvalue().splitlines()]
-        self.assertEqual([r["event"] for r in records], ["sample", "failed"])
-        self.assertEqual(records[0]["metadata"]["text"], "a\nb")
-        self.assertIn("RuntimeError: multiline\nerror", records[1]["exception"])
+        text = stream.getvalue()
+        self.assertIn("[INFO] sample time=", text)
+        self.assertIn("path=/example text='a\\nb'", text)
+        self.assertIn("[ERROR] failed time=", text)
+        self.assertIn("Traceback (most recent call last):", text)
+        self.assertIn("RuntimeError: multiline\nerror", text)
+        self.assertNotIn("hidden", text)
 
 
 if __name__ == "__main__":

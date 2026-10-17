@@ -59,3 +59,12 @@ def first_job(path):
     ):
         raise ValueError(f"Comparison needs explicit coordinates: {path}")
     return text.rstrip() + "\n\n"
+
+
+def job_count(path):
+    """Count Gaussian job-start records, excluding internal Opt/Freq steps."""
+    path = Path(path)
+    if path.suffix.lower() not in {".log", ".out"}:
+        return 1
+    with path.open(errors="replace") as stream:
+        return max(1, sum(line.lstrip().startswith("Entering Link 1 =") for line in stream))

@@ -6,7 +6,8 @@ import sys
 import time
 from pathlib import Path
 
-from .files import input_paths
+from .errors import ActionUnavailable
+from .files import input_paths, job_count
 from .logging import LOG, configure_logging
 from .models import Workflow
 from .surfaces import color_range
@@ -73,18 +74,20 @@ def reusable_groups(viewer):
         if "mapped with" in w.get("kCGWindowName", "")
         and f"isoval = {workflow.density_isovalue:g}" in w.get("kCGWindowName", "")
     }
-    for window in windows:
-        title = window.get("kCGWindowName", "")
-        if str(workflow.source) not in title:
-            continue
-        match = re.match(r"G(\d+):", title)
-        if not match:
-            continue
-        start = int(match.group(1))
-        source_group = f"G{start}:"
-        groups = [f"G{start + offset}:" for offset in range(1, len(workflow.surfaces) + 1)]
-        if all(group in mapped_groups for group in groups):
-            return [source_group, *groups]
+    sources = {
+        int(match.group(1))
+        for window in windows
+        if str(workflow.source) in (title := window.get("kCGWindowName", ""))
+        and (match := re.match(r"G(\d+):M\d+:V\d+", title))
+    }
+    for start in sorted(sources):
+        end = start
+        while end + 1 in sources:
+            end += 1
+        groups = [f"G{number}:" for number in range(start, end + 1)]
+        surfaces = [f"G{end + offset}:" for offset in range(1, len(workflow.surfaces) + 1)]
+        if len(groups) >= job_count(workflow.source) and all(group in mapped_groups for group in surfaces):
+            return [*groups, *surfaces]
     return None
 
 
@@ -125,10 +128,19 @@ def launch(workflow, app, reuse_views=True):
         if all(p.stat().st_mtime < process_start for p in workflow.files):
             viewer = MacViewer(pids[0], workflow, app, bounds)
             groups = reusable_groups(viewer)
-            if groups and all(viewer.result_window(groups[0], r) for r in workflow.results):
+            source_groups = (
+                (groups[: -len(workflow.surfaces)] if workflow.surfaces else groups)
+                if groups
+                else []
+            )
+            if source_groups and all(
+                any(viewer.result_window(group, result) for group in source_groups)
+                for result in workflow.results
+            ):
                 viewer.group_ids.update(groups)
                 try:
-                    for group in groups[1:]:
+                    surface_groups = groups[-len(workflow.surfaces) :] if workflow.surfaces else []
+                    for group in surface_groups:
                         viewer.verify_scale(group)
                 except RuntimeError as error:
                     LOG.debug(
@@ -137,8 +149,12 @@ def launch(workflow, app, reuse_views=True):
                     )
                 else:
                     for result in workflow.results:
-                        if not viewer.result_window(groups[0], result):
-                            viewer.open_result(groups[0], result)
+                        for group in source_groups:
+                            if not viewer.result_window(group, result):
+                                try:
+                                    viewer.open_result(group, result)
+                                except ActionUnavailable:
+                                    continue
                     viewer.front(force=True)
                     return viewer, groups, True
 
@@ -197,7 +213,11 @@ def launch(workflow, app, reuse_views=True):
         },
     )
 
+    expected_source_jobs = job_count(workflow.source)
+
     def ready():
+        if viewer.select_file_jobs():
+            return False
         for window in viewer.windows():
             if not window.get("kCGWindowName") and viewer.label(
                 window, "Gaussian is not installed"
@@ -211,12 +231,28 @@ def launch(workflow, app, reuse_views=True):
                     for t in labels
                 ):
                     raise RuntimeError("GaussView rejected the input: " + "; ".join(labels))
-        return all(opened(p) for p in [workflow.source, *density_files])
+        source_groups = {
+            w["kCGWindowName"].split(":")[0]
+            for w in viewer.windows()
+            if w["kCGWindowNumber"] not in previous_windows
+            and str(workflow.source) in w.get("kCGWindowName", "")
+        }
+        return len(source_groups) >= expected_source_jobs and all(
+            opened(p) for p in [workflow.source, *density_files]
+        )
 
     wait_for(ready, "source and density files", timeout=45)
-    source_group = opened(workflow.source)["kCGWindowName"].split(":")[0] + ":"
+    source_groups = list(
+        dict.fromkeys(
+            w["kCGWindowName"].split(":")[0] + ":"
+            for w in viewer.windows()
+            if w["kCGWindowNumber"] not in previous_windows
+            and str(workflow.source) in w.get("kCGWindowName", "")
+        )
+    )
+    source_groups.sort(key=lambda group: int(group[1:-1]))
     surface_groups = [opened(p)["kCGWindowName"].split(":")[0] + ":" for p in density_files]
-    groups = [source_group, *surface_groups]
+    groups = [*source_groups, *surface_groups]
     viewer.group_ids.update(groups)
     for surface, group in zip(workflow.surfaces, surface_groups, strict=True):
         LOG.debug(
@@ -230,19 +266,28 @@ def launch(workflow, app, reuse_views=True):
             "surface_styled",
             extra={"metadata": {"state": surface.name, "group": group}},
         )
-    viewer.orient(source_group)
+    for group in source_groups:
+        viewer.orient(group)
     for result in workflow.results:
-        window = viewer.open_result(source_group, result)
-        LOG.debug(
-            "result_opened",
-            extra={
-                "metadata": {
-                    "result": result.name,
-                    "window": window["kCGWindowName"],
-                    "group": source_group,
-                }
-            },
-        )
+        displays = []
+        for group in source_groups:
+            try:
+                window = viewer.open_result(group, result)
+            except ActionUnavailable:
+                continue
+            displays.append(window)
+            LOG.debug(
+                "result_opened",
+                extra={
+                    "metadata": {
+                        "result": result.name,
+                        "window": window["kCGWindowName"],
+                        "group": group,
+                    }
+                },
+            )
+        if not displays:
+            raise ActionUnavailable(f"{result.name} is unavailable in all loaded jobs")
     if workflow.layout:
         viewer.arrange(groups)
     return viewer, groups, False

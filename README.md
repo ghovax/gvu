@@ -36,7 +36,7 @@ if __name__ == "__main__":
 Run it with `uv run viewer.py`. Configure its behavior through Python:
 
 - `workflow.validate()` checks the data without opening windows.
-- `workflow.view(reuse_views=False, log_level="DEBUG")` opens fresh views with diagnostic JSON Lines events.
+- `workflow.view(reuse_views=False, log_level="DEBUG")` opens fresh views with diagnostic text records.
 - `workflow.view(application_path=Path("/path/to/gview.app"))` selects an installation.
 
 ## Documentation

@@ -78,7 +78,7 @@ class Session:
 
     def load(self, paths, grouping=Grouping.SEPARATE, read_intermediates=False):
         """Load documents and own exactly the new molecule groups they create."""
-        from .files import input_paths
+        from .files import input_paths, job_count
         from .macos import wait_for
 
         paths = input_paths(paths)
@@ -93,10 +93,26 @@ class Session:
             self.backend.open_documents(paths, read_intermediates, grouping)
 
             def loaded():
+                if self.backend.select_file_jobs():
+                    return False
                 self.backend.check_errors()
                 created = groups() - before
-                expected = len(paths) if grouping is Grouping.SEPARATE else 1
-                return created if len(created) == expected else None
+                expected = sum(job_count(p) for p in paths) if grouping is Grouping.SEPARATE else 1
+                loaded_paths = {
+                    p
+                    for p in paths
+                    if any(
+                        str(p) in w.get("kCGWindowName", "")
+                        for w in self.backend.windows()
+                        if w.get("kCGWindowName", "").split(":")[0] + ":" in created
+                    )
+                }
+                return (
+                    created
+                    if len(created) >= expected
+                    and (grouping is Grouping.TOGETHER or len(loaded_paths) == len(paths))
+                    else None
+                )
 
             created = wait_for(loaded, "loaded molecule groups", timeout=45)
         except Exception:

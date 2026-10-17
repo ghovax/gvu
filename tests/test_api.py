@@ -152,6 +152,73 @@ class ApiTests(unittest.TestCase):
             backend.map_surface("reverse-endpoint", "G6:")
         backend.activate.assert_called_once_with(requested)
 
+    def test_legend_fields(self):
+        """Find numeric range fields beside, rather than inside, frame controls."""
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        view = {"kCGWindowBounds": {"X": 100, "Y": 50, "Width": 1000, "Height": 600}}
+        backend.read = lambda window: [
+            ("1", 190, 99),
+            ("Of 2", 260, 99),
+            ("-7.429e-2|", 395, 99),
+            ("8.600e-2", 790, 99),
+        ]
+        self.assertEqual(backend.scale_fields(view), [(-0.07429, 395, 99), (0.086, 790, 99)])
+        backend.read = lambda window: [("1", 190, 99)]
+        with self.assertRaises(ActionUnavailable):
+            backend.scale_fields(view)
+
+    def test_legend_target(self):
+        """Edit the discovered range-field centers before verifying the legend."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        view = {"kCGWindowBounds": {"X": 100, "Y": 50, "Width": 1000, "Height": 600}}
+        backend.group_view = lambda group: view
+        backend.activate = Mock()
+        backend.scale_fields = lambda window: [(-0.1, 395, 99), (0.1, 790, 99)]
+        backend.click = Mock()
+        backend.enter = Mock()
+        backend.verify_scale = Mock()
+        backend.color_range = (-0.2, 0.2)
+        backend.apply_scale("G2:")
+        self.assertEqual(backend.click.call_args_list[1::2], [((395, 99),), ((790, 99),)])
+        self.assertEqual(backend.enter.call_args_list, [((-0.2,),), ((0.2,),)])
+        backend.verify_scale.assert_called_once_with("G2:")
+
+    def test_linked_jobs(self):
+        """Select every linked job in the native table and confirm loading."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        dialog = {"kCGWindowName": "Select Jobs from File"}
+        backend.find = Mock(side_effect=[dialog, None])
+        backend.read = lambda window: [("Job Type", 100, 100), ("Ok", 400, 400)]
+        backend.click = Mock()
+        backend.apple = Mock()
+        self.assertTrue(backend.select_file_jobs())
+        backend.apple.assert_called_once_with('keystroke "a" using command down')
+        self.assertEqual(backend.click.call_args_list, [((100, 130),), ((400, 400),)])
+        backend.find = lambda title: None
+        self.assertFalse(backend.select_file_jobs())
+
+    def test_result_window(self):
+        """Do not confuse a scan log's filename with its native scan plot."""
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        source = {"kCGWindowName": "G2:M1:V1 (Job #2) - Scan.log (/tmp/Scan.log)"}
+        plot = {"kCGWindowName": "G2:M1:V1 (Job #2) - Scan Plot"}
+        backend.windows = lambda: [source, plot]
+        self.assertIs(backend.result_window("G2:", Result.SCAN), plot)
+        backend.windows = lambda: [source]
+        self.assertIsNone(backend.result_window("G2:", Result.SCAN))
+
     def test_result_catalog(self):
         """Expose all 17 documented Results entries with title aliases."""
         self.assertEqual(len(Result), 17)

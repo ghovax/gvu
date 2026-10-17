@@ -7,9 +7,11 @@ The tested installation is macOS GaussView 6.0.16. Unit tests cover menu hierarc
 Live checks covered:
 
 - Grouped geometry loading and owned-group cleanup.
+- Both sections of a linked-job scan log and their separate scan plots.
 - Native axis alignment, fitting/centering and camera rotation.
 - Selected-window placement and frame selection/playback.
 - Mapped ESP surfaces and structure/image export.
+- Shared ESP legends located by their numeric fields, including fields with a visible editing caret.
 - Vibration selection, scrolling and playback.
 - Native optimization-plot data export.
 - All ten application menu roots, Help-name normalization and disabled-parent state.
@@ -48,4 +50,4 @@ Bonds displayed by GaussView can be inferred from geometry or read from connecti
 
 ## Logs
 
-GVU emits JSON Lines to stderr with UTC timestamps, severity, process ID, event and relevant metadata. Default output records essential opening, scale and failure events; `workflow.view(log_level="DEBUG")` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.
+GVU emits `[LEVEL] message key=value ...` records to stderr with UTC timestamps, logger, process ID and relevant metadata. Exceptions include ordinary Python tracebacks. Default output records essential opening, scale and failure events; `workflow.view(log_level="DEBUG")` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.

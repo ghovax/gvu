@@ -123,12 +123,25 @@ class DocumentTests(unittest.TestCase):
             path.write_bytes(b"\xff\x00\x80")
             validate(Workflow(path, results=(Result.VIBRATIONS,)))
 
+    def test_job_records(self):
+        """Wait for explicit linked jobs without counting automatic frequency steps."""
+        from gvu.files import job_count
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "calculation.log"
+            path.write_text(" Entering Link 1 = first\nNormal termination\nLink1: Proceeding to internal job step number 2\nNormal termination\n")
+            self.assertEqual(job_count(path), 1)
+            path.write_text(path.read_text() + " Entering Link 1 = second\n")
+            self.assertEqual(job_count(path), 2)
+
     def test_load_ownership(self):
         """Own new groups only, even when attached to an existing session."""
         backend = SimpleNamespace(
             molecule_groups=Mock(side_effect=[{"G1:"}, {"G1:", "G2:"}]),
             open_documents=Mock(),
             check_errors=Mock(),
+            select_file_jobs=Mock(return_value=False),
+            windows=lambda: [{"kCGWindowName": f"G2:M1:V1 - {path.resolve()}"}],
             group_ids=set(),
         )
         with TemporaryDirectory() as directory:

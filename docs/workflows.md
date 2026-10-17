@@ -39,6 +39,13 @@ for model in models:
 
 Supported extensions are validated before the file dialog opens; XYZ is unsupported by this interface.
 
+For linked-job logs:
+
+- GVU selects all sections in the native job-selection dialog.
+- Loading waits for every explicit job to appear. Internal optimization/frequency steps do not count as separate file jobs.
+- A multi-job log can create several molecule groups.
+- Requested result panels open for the jobs that contain those results.
+
 For input-geometry comparisons, use `session.compare([first, second], name="comparison")`. It takes the explicit first-job geometry from each `.gjf` or `.com`, excludes later Link1 jobs from temporary display copies, checks the frame count and aligns the resulting group. The copies are removed after loading; source inputs are unchanged. This helper requires explicit coordinates in the first job.
 
 ## Align, fit and position
@@ -86,7 +93,7 @@ Mode indices also start at one. Mode selection can scroll the native table. A re
 
 ## Density surfaces and ESP
 
-Declare paired `Surface(name, density=density_path, potential=potential_path)` files in a `Workflow`. Both file arguments are required and keyword-only. Use the same density boundary and opacity for compared states. The library derives shared color limits live by evaluating the potential on the exterior density boundary; it does not use cached scale reports. Grid dimensions and geometry provenance must remain consistent with the calculation.
+Declare paired `Surface(name, density=density_path, potential=potential_path)` files in a `Workflow`. Both file arguments are required and keyword-only. Use the same density boundary and opacity for compared states. The library derives shared color limits live by evaluating the potential on the exterior density boundary; it does not use cached scale reports. Grid dimensions and geometry provenance must remain consistent with the calculation. Legend bounds are entered through the detected numeric fields, independently of frame-toolbar placement.
 
 ```python
 from pathlib import Path

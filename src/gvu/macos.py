@@ -22,7 +22,7 @@ def wait_for(check, description, timeout=20):
 
 def window_reference(title):
     """Address a view without the frame number that changes during playback."""
-    match = re.fullmatch(r"(G\d+:)M\d+(:V\d+ - .+)", title)
+    match = re.fullmatch(r"(G\d+:)M\d+(:V\d+(?: \(Job #\d+\))? - .+)", title)
     if match:
         return (
             "(first window whose name starts with "
@@ -255,6 +255,23 @@ class MacViewer:
         )
         self.click(button[1], button[2])
         wait_for(lambda: self.find("Open Files") is None, "files to open")
+
+    def select_file_jobs(self):
+        """Load every linked job when GaussView asks which file sections to read."""
+        dialog = self.find("Select Jobs from File")
+        if dialog is None:
+            return False
+        labels = self.read(dialog)
+        header = next((label for label in labels if label[0] == "Job Type"), None)
+        button = next((label for label in labels if label[0].lower() == "ok"), None)
+        if header is None or button is None:
+            raise ActionUnavailable("Cannot identify the linked-job table and confirmation button")
+        # Focus the table below its header, then use its native Select All action.
+        self.click(header[1], header[2] + 30)
+        self.apple('keystroke "a" using command down')
+        self.click(button[1], button[2])
+        wait_for(lambda: self.find("Select Jobs from File") is None, "selected jobs to load")
+        return True
 
     def click(self, x, y):
         self.front()
@@ -665,42 +682,45 @@ class MacViewer:
     def transparent(self, group):
         self.surface_format(group)
 
+    def scale_fields(self, view):
+        """Locate the two numeric ESP legend fields, excluding frame controls."""
+        bounds = view["kCGWindowBounds"]
+        fields = []
+        for label in self.read(view):
+            text = label[0].replace("O", "0").replace("o", "0").replace("−", "-").rstrip("|")
+            if (
+                bounds["Y"] + 24 < label[2] < bounds["Y"] + 85
+                and ("." in text or "e" in text.lower())
+                and re.fullmatch(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", text)
+            ):
+                fields.append((float(text), label[1], label[2]))
+        if len(fields) != 2:
+            raise ActionUnavailable("Cannot identify both ESP legend fields")
+        return sorted(fields, key=lambda field: field[1])
+
     def apply_scale(self, group):
         view = self.group_view(group)
         self.activate(view)
-        view = self.group_view(group)
         bounds = view["kCGWindowBounds"]
-        for dx, value in (
-            (40, self.color_range[0]),
-            (bounds["Width"] - 49, self.color_range[1]),
-        ):
-            self.click(bounds["X"] + dx, bounds["Y"] + 38)
+        self.click(bounds["X"] + bounds["Width"] - 20, bounds["Y"] + bounds["Height"] - 50)
+        # Inspect both fields before typing; toolbar positions vary with frame controls.
+        self.scale_fields(self.group_view(group))
+        for index, value in enumerate(self.color_range):
+            view = self.group_view(group)
+            field = self.scale_fields(view)[index]
+            self.click(field[1], field[2])
             self.enter(value)
-            self.click(bounds["X"] + bounds["Width"] / 2, bounds["Y"] + 90)
+            bounds = view["kCGWindowBounds"]
+            self.click(bounds["X"] + bounds["Width"] - 20, bounds["Y"] + bounds["Height"] - 50)
         self.verify_scale(group)
 
     def verify_scale(self, group):
         view = self.group_view(group)
         if view is None:
             raise RuntimeError(f"Missing mapped view for {group}")
-        bounds = view["kCGWindowBounds"]
-        labels = [
-            label
-            for label in self.read(view)
-            if bounds["Y"] + 24 < label[2] < bounds["Y"] + 56
-        ]
-        for value, x in zip(
-            self.color_range, (bounds["X"] + 40, bounds["X"] + bounds["Width"] - 49), strict=True
-        ):
-            if not labels:
-                raise RuntimeError(f"Cannot verify ESP color range for {group}")
-            text = min(labels, key=lambda label: abs(label[1] - x))[0]
-            text = text.replace("O", "0").replace("o", "0").replace("−", "-")
-            match = re.search(r"[-+]?\d*\.\d+(?:[eE][-+]?\d+)?", text)
-            if not match or abs(float(match.group()) - float(value)) > 0.0005:
-                raise RuntimeError(
-                    f"Failed to verify ESP bound {value} for {group}: {text}"
-                )
+        for field, value in zip(self.scale_fields(view), self.color_range, strict=True):
+            if abs(field[0] - float(value)) > 0.0005:
+                raise RuntimeError(f"Failed to verify ESP bound {value} for {group}: {field[0]}")
 
     def arrange(self, groups):
         """Use the user's staggered arrangement, with small bounded variations."""
@@ -712,16 +732,15 @@ class MacViewer:
         top = area.y
         bottom = area.y + area.height
         jitter = random.SystemRandom()
-        roles = dict(zip((s.name for s in self.workflow.surfaces), groups[1:], strict=True))
+        surface_groups = groups[-len(self.workflow.surfaces) :] if self.workflow.surfaces else []
+        roles = dict(zip((s.name for s in self.workflow.surfaces), surface_groups, strict=True))
         roles["source"] = groups[0]
         self.front(force=True)
         for role, position, size in self.workflow.layout:
             result = (
                 role
                 if isinstance(role, Result)
-                else (
-                    next(iter(self.workflow.results), None) if role == "plot" else None
-                )
+                else (next(iter(self.workflow.results), None) if role == "plot" else None)
             )
             window = (
                 wait_for(
@@ -757,32 +776,31 @@ class MacViewer:
                     top,
                     min(
                         bottom - h,
-                        screen.bounds.y
-                        + py * sy
-                        + jitter.uniform(-pos_noise, pos_noise),
+                        screen.bounds.y + py * sy + jitter.uniform(-pos_noise, pos_noise),
                     ),
                 )
             )
             target = window_reference(window["kCGWindowName"])
             self.apple(
-                f"set size of {target} to {{{w}, {h}}}\n"
-                f"set position of {target} to {{{px}, {py}}}"
+                f"set size of {target} to {{{w}, {h}}}\nset position of {target} to {{{px}, {py}}}"
             )
         self.front(force=True)
 
     def result_window(self, group, result):
-        return next(
-            (
-                w
-                for w in self.windows()
-                if w.get("kCGWindowName", "").startswith(group)
-                and any(
-                    t.lower() in w.get("kCGWindowName", "").lower()
-                    for t in result.titles
-                )
-            ),
-            None,
-        )
+        for window in self.windows():
+            title = window.get("kCGWindowName", "")
+            if not title.startswith(group):
+                continue
+            detail = title.partition(" - ")[2]
+            if re.search(r"\([/~].*\)$", detail):
+                continue
+            if any(
+                detail.casefold() == name.casefold()
+                or detail.casefold().startswith(name.casefold() + " ")
+                for name in result.titles
+            ):
+                return window
+        return None
 
     def open_result(self, group, result):
         self.activate(self.group_view(group))
