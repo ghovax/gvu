@@ -64,6 +64,35 @@ class ScientificRangeTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_view_check(self):
+        """Validate through the workflow method without launching a native app."""
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "model.gjf"
+            source.write_text("# PM6\n\nExample\n\n0 1\nH 0 0 0\n\n")
+            stream = io.StringIO()
+            with patch("gvu.viewer.launch") as launch, contextlib.redirect_stderr(stream):
+                Workflow(source).view(["--check"])
+            launch.assert_not_called()
+            records = [json.loads(line) for line in stream.getvalue().splitlines()]
+            self.assertEqual(records[-1]["event"], "workflow_validated")
+
+    def test_view_options(self):
+        """Preserve application selection and fresh-view options through the method."""
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "model.gjf"
+            source.write_text("# PM6\n\nExample\n\n0 1\nH 0 0 0\n\n")
+            app = Path(directory) / "gview.app"
+            executable = app / "Contents/MacOS/gview"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            workflow = Workflow(source)
+            result = (SimpleNamespace(pid=123), ["G1:"], False)
+            with patch("gvu.viewer.sys.platform", "darwin"), patch("gvu.viewer.launch", return_value=result) as launch, contextlib.redirect_stderr(io.StringIO()):
+                workflow.view(["--app", str(app), "--new"])
+            launch.assert_called_once_with(workflow, app.resolve(), True)
+
     def test_missing_data(self):
         """Reject a requested property absent from the log before opening the UI."""
         with TemporaryDirectory() as directory:

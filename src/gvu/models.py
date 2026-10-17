@@ -168,3 +168,17 @@ class Workflow:
             self.source,
             *(p for s in self.surfaces for p in (s.density, s.potential)),
         )
+
+    def view(self, argv: list[str] | None = None):
+        """Open this workflow with the shared viewer command-line options.
+
+        Args:
+            argv: Command-line arguments such as ``["--check"]``. When omitted,
+                read the arguments supplied to the calling viewer script.
+
+        The ``--check`` option validates data without opening GaussView.
+        ``--new`` requests fresh views; ``--app`` selects an installation.
+        """
+        from .viewer import run_workflow
+
+        return run_workflow(self, argv)

@@ -30,19 +30,24 @@ Place this entry point beside your calculation or under its `scripts/` directory
 ```python
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["gvu>=0.2.0,<0.3"]
+# dependencies = ["gvu>=0.3.0,<0.4"]
 # ///
 from pathlib import Path
-from gvu import Alignment, Result, Workflow, view
+from gvu import Alignment, Result, Workflow
 
-RUN = Path(__file__).resolve().parent.parent
+
+def main():
+    run = Path(__file__).resolve().parent.parent
+    workflow = Workflow(
+       source=run / "logs/optimization.log",
+       results=(Result.OPTIMIZATION, Result.VIBRATIONS),
+       alignment=Alignment("X", "Y"),
+    )
+    workflow.view()
+
 
 if __name__ == "__main__":
-    view(Workflow(
-        source=RUN / "logs/optimization.log",
-        results=(Result.OPTIMIZATION, Result.VIBRATIONS),
-        alignment=Alignment("X", "Y"),
-    ))
+    main()
 ```
 
 Choose results that the calculation actually contains. Use only `source` for an input-geometry viewer. Run `--check` first, then open the viewer. The [viewing guide](workflows.md) explains surfaces, comparisons and ownership; the [menu guide](controls.md) explains actions outside the specialized helpers.

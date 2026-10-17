@@ -274,8 +274,8 @@ def launch(workflow, app, fresh=False):
     return viewer, groups, False
 
 
-def view(workflow: Workflow, argv=None):
-    """Run the common command-line interface for a run's declared workflow."""
+def run_workflow(workflow: Workflow, argv=None):
+    """Execute the command-line interface selected by Workflow.view."""
     configure_logging()
     parser = ArgumentParser(
         description="Open this run's existing results in macOS GaussView 6."

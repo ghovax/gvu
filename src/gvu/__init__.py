@@ -23,7 +23,6 @@ from .models import (
     SurfaceStyle,
     Workflow,
 )
-from .viewer import view
 
 __all__ = [
     "ActionUnavailable",
@@ -46,5 +45,4 @@ __all__ = [
     "UnsupportedFormat",
     "Vibrations",
     "Workflow",
-    "view",
 ]

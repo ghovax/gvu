@@ -162,8 +162,3 @@ UnsupportedFormat
    :members:
    :undoc-members:
    :show-inheritance:
-
-Command-line workflow
----------------------
-
-.. autofunction:: gvu.view

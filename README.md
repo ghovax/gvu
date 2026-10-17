@@ -15,16 +15,22 @@ For a standalone viewer script, let uv install the published package automatical
 ```python
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["gvu>=0.2.0,<0.3"]
+# dependencies = ["gvu>=0.3.0,<0.4"]
 # ///
 from pathlib import Path
-from gvu import Alignment, Workflow, view
+from gvu import Alignment, Workflow
+
+
+def main():
+    workflow = Workflow(
+       source=Path(__file__).resolve().parent / "molecule.gjf",
+       alignment=Alignment("X", "Y"),
+    )
+    workflow.view()
+
 
 if __name__ == "__main__":
-    view(Workflow(
-        source=Path(__file__).resolve().parent / "molecule.gjf",
-        alignment=Alignment("X", "Y"),
-    ))
+    main()
 ```
 
 Run it with `uv run viewer.py`. Use `--check` for data preflight, `--new` to request fresh views and `--verbose` for diagnostic JSON Lines events.

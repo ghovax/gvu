@@ -50,15 +50,15 @@ Build with warnings treated as errors after changing documentation or public API
 
 The `publish.yml` workflow uses PyPI Trusted Publishing with the GitHub environment `pypi`. Configure a pending publisher on PyPI with project `gvu`, owner `ghovax`, repository `gvu`, workflow `publish.yml` and environment `pypi`. This is required once, before the first upload; no long-lived API token is needed.
 
-Update the version in `pyproject.toml`, refresh `uv.lock`, run the checks and build both distributions with `uv build --no-sources`. The tag must match the package version, for example `v0.2.0`. Pushing that tag runs the release workflow: build, metadata checks, wheel/source-install smoke tests, attestations and trusted upload. A PyPI release version cannot be replaced; subsequent changes require a new version.
+Update the version in `pyproject.toml`, refresh `uv.lock`, run the checks and build both distributions with `uv build --no-sources`. The tag must match the package version, for example `v0.3.0`. Pushing that tag runs the release workflow: build, metadata checks, wheel/source-install smoke tests, attestations and trusted upload. A PyPI release version cannot be replaced; subsequent changes require a new version.
 
 ```bash
 uv lock
 uv run python -m unittest discover -s tests
 uv build --no-sources
 uv run twine check --strict dist/*
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The `workflow_dispatch` event can rerun a verified tag after correcting publishing authorization. The workflow checks the tag against package metadata before uploading.
