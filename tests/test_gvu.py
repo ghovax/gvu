@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from gvu import Result, Surface, Workflow
+from gvu import Result, Session, Surface, Workflow
 from gvu.logging import LOG, configure_logging
 from gvu.surfaces import surface_range
 from gvu.viewer import reusable_groups, validate
@@ -70,7 +70,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(stream.getvalue(), "")
 
     def test_view_options(self):
-        """Preserve application selection and fresh-view options through the method."""
+        """Pass the application path and explicit reuse policy to the launcher."""
         from unittest.mock import patch
 
         with TemporaryDirectory() as directory:
@@ -87,8 +87,8 @@ class WorkflowTests(unittest.TestCase):
                 patch("gvu.viewer.launch", return_value=result) as launch,
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                workflow.view(app=app, fresh=True)
-            launch.assert_called_once_with(workflow, app.resolve(), True)
+                workflow.view(application_path=app, reuse_views=False)
+            launch.assert_called_once_with(workflow, app.resolve(), reuse_views=False)
 
     def test_process_args(self):
         """Ignore host process arguments when opening a workflow."""
@@ -108,7 +108,7 @@ class WorkflowTests(unittest.TestCase):
                 patch("gvu.viewer.launch", return_value=result),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                Workflow(source).view(app=app, verbose=True)
+                Workflow(source).view(application_path=app, log_level="DEBUG")
                 self.assertEqual(LOG.level, 10)
 
     def test_view_failure(self):
@@ -122,6 +122,44 @@ class WorkflowTests(unittest.TestCase):
             ):
                 Workflow(source).view()
             self.assertEqual(stream.getvalue(), "")
+
+    def test_session_options(self):
+        """Apply the same reuse policy to Session.open and group ownership."""
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "model.gjf"
+            source.write_text("# PM6\n\nExample\n\n0 1\nH 0 0 0\n\n")
+            workflow = Workflow(source)
+            app = Path(directory) / "gview.app"
+            for reuse in (False, True):
+                with (
+                    self.subTest(reuse=reuse),
+                    patch(
+                        "gvu.api.launch",
+                        return_value=(SimpleNamespace(pid=123), ["G1:"], reuse),
+                    ) as launch,
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    configure_logging()
+                    session = Session.open(workflow, application_path=app, reuse_views=reuse)
+                    launch.assert_called_once_with(workflow, app.resolve(), reuse_views=reuse)
+                    self.assertEqual(session.owned, not reuse)
+
+    def test_log_levels(self):
+        """Accept standard level names and numbers; reject invalid levels before opening."""
+        from unittest.mock import patch
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            for level, expected in (("INFO", 20), ("DEBUG", 10), (30, 30)):
+                configure_logging(log_level=level)
+                self.assertEqual(LOG.level, expected)
+            with (
+                patch("gvu.viewer.launch") as launch,
+                self.assertRaisesRegex(ValueError, "Unknown level"),
+            ):
+                Workflow(Path("/missing.gjf")).view(log_level="INVALID")
+            launch.assert_not_called()
 
     def test_missing_data(self):
         """Reject a requested property absent from the log before opening the UI."""

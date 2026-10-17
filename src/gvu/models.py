@@ -178,17 +178,25 @@ class Workflow:
 
         validate(self)
 
-    def view(self, *, app: Path | None = None, fresh: bool = False, verbose: bool = False):
+    def view(
+        self,
+        *,
+        application_path: Path | str | None = None,
+        reuse_views: bool = True,
+        log_level: int | str = "INFO",
+    ):
         """Open this workflow in GaussView.
 
         Args:
-            app: Application bundle; defaults to ~/Applications/GaussView6/gview.app.
-            fresh: Open new views instead of reusing this workflow's existing views.
-            verbose: Include diagnostic JSON Lines events on stderr.
+            application_path: Application bundle; defaults to ~/Applications/GaussView6/gview.app.
+            reuse_views: Reuse matching open views; False opens new views.
+            log_level: Standard logging level, such as "INFO", "DEBUG" or logging.DEBUG.
 
         Validates the workflow before opening windows. Failures raise their original
         exceptions for the caller to handle. Process arguments are never inspected.
         """
         from .viewer import open_workflow
 
-        return open_workflow(self, app=app, fresh=fresh, verbose=verbose)
+        return open_workflow(
+            self, application_path=application_path, reuse_views=reuse_views, log_level=log_level
+        )

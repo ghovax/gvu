@@ -14,7 +14,14 @@ GVU controls macOS GaussView 6 through a shared Python interface. Run-specific v
 | Check what has been verified and diagnose failures | [Coverage and troubleshooting](coverage.md) |
 | Build or maintain these docs | [Development](development.md) |
 
-The sidebar lists these pages and their sections. Use the search box for a command or Python name, the breadcrumbs to return to the documentation root, and the previous/next links to follow the guide in order. The API reference is generated from the installed package so signatures follow the implementation.
+Navigate the documentation using:
+
+- The sidebar for pages and their sections.
+- The search box for a command or Python name.
+- Breadcrumbs to return to the documentation root.
+- Previous/next links to follow the guide in order.
+
+The API reference is generated from the installed package so signatures follow the implementation.
 
 ```{toctree}
 :maxdepth: 2

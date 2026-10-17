@@ -2,7 +2,7 @@
 
 ## Sessions and ownership
 
-`Session.open(workflow)` validates a workflow, starts or attaches to GaussView and opens its declared views. `Session.attach()` requires one running app and attaches without claiming existing groups. Group identifiers such as `"G1:"` belong to the current application session; discover them at runtime rather than treating them as permanent file identifiers.
+`Session.open(workflow)` validates a workflow, starts or attaches to GaussView and opens its declared views. `Session.attach()` requires one running app and attaches without claiming existing groups. Both methods accept `application_path=Path(...)`; `Session.open(..., reuse_views=False)` requests new views. Group identifiers such as `"G1:"` belong to the current application session; discover them at runtime rather than treating them as permanent file identifiers.
 
 ```python
 from gvu import Session
@@ -12,7 +12,11 @@ model = session.model("G1:")
 model.center()
 ```
 
-A session owns groups freshly created by its `open`, `load` and `compare` operations. `session.close()` closes those groups while retaining pre-existing groups. A `with Session.open(...) as session:` block closes owned groups on exit; reused groups remain open. Keep a session outside a context block when new views should remain on screen.
+A session owns groups freshly created by its `open`, `load` and `compare` operations:
+
+- `session.close()` closes owned groups while retaining pre-existing groups.
+- A `with Session.open(...) as session:` block closes owned groups on exit; reused groups remain open.
+- Keep a session outside a context block when new views should remain on screen.
 
 ## Load and compare structures
 
@@ -29,7 +33,11 @@ for model in models:
     model.align(Alignment("X", "Y"))
 ```
 
-`Grouping.SEPARATE` creates separate groups; `Grouping.TOGETHER` loads documents into one group. Set `read_intermediates=True` to load optimization/scan/IRC intermediate geometries explicitly. Supported extensions are validated before the file dialog opens; XYZ is unsupported by this interface.
+- `Grouping.SEPARATE` creates separate groups.
+- `Grouping.TOGETHER` loads documents into one group.
+- `read_intermediates=True` loads optimization/scan/IRC intermediate geometries explicitly.
+
+Supported extensions are validated before the file dialog opens; XYZ is unsupported by this interface.
 
 For input-geometry comparisons, use `session.compare([first, second], name="comparison")`. It takes the explicit first-job geometry from each `.gjf` or `.com`, excludes later Link1 jobs from temporary display copies, checks the frame count and aligns the resulting group. The copies are removed after loading; source inputs are unchanged. This helper requires explicit coordinates in the first job.
 
@@ -45,7 +53,11 @@ session.arrange(models, style=Layout.OVERLAP, screen=screens[0])
 models[0].bounds(Bounds(150, 130, 620, 390))
 ```
 
-The `Screen` objects include complete and usable display bounds. Display coordinates can be negative for monitors left of or above the main display. Without an explicit screen, `arrange` uses the display containing the pointer. `OVERLAP`, `CASCADE` and `TILE` arrange only the selected models. Focusing a model does not reposition it.
+- `Screen` objects include complete and usable display bounds.
+- Display coordinates can be negative for monitors left of or above the main display.
+- Without an explicit screen, `arrange` uses the display containing the pointer.
+- `OVERLAP`, `CASCADE` and `TILE` arrange only the selected models.
+- Focusing a model does not reposition it.
 
 Use `with session.preserve_windows():` around operations that should restore existing bounds on exit. It restores changed windows that still exist, including after an exception, and leaves group visibility unchanged.
 
@@ -99,6 +111,11 @@ A few endpoint/TS surfaces do not supply an ESP animation for every IRC geometry
 
 ## Exports and other commands
 
-`model.save(path)` exports a native structure, `model.image(path)` a native image, and `model.movie(path)` a movie. Plot helpers expose `data(path)`, `image(path)` and `properties()`. Exports reject existing paths. Movie export remains unverified in the current coverage record.
+- `model.save(path)` exports a native structure.
+- `model.image(path)` exports a native image.
+- `model.movie(path)` exports a movie; end-to-end movie export remains unverified in the current coverage record.
+- Plot helpers expose `data(path)`, `image(path)` and `properties()`.
+
+Exports reject existing paths.
 
 Use the [menu and dialog guide](controls.md) for other native actions. Consult [coverage](coverage.md) before treating a specialized operation as tested.

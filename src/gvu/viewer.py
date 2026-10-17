@@ -88,7 +88,7 @@ def reusable_groups(viewer):
     return None
 
 
-def launch(workflow, app, fresh=False):
+def launch(workflow, app, reuse_views=True):
     import Quartz as Q
     from ApplicationServices import (
         AXIsProcessTrusted,
@@ -113,7 +113,7 @@ def launch(workflow, app, fresh=False):
     pids = application_pids(executable)
     if len(pids) > 1:
         raise RuntimeError("Close duplicate GaussView app instances before running this launcher")
-    if not fresh and pids:
+    if reuse_views and pids:
         process_started = subprocess.run(
             ["ps", "-p", str(pids[0]), "-o", "lstart="],
             capture_output=True,
@@ -248,21 +248,25 @@ def launch(workflow, app, fresh=False):
     return viewer, groups, False
 
 
-def open_workflow(workflow: Workflow, *, app=None, fresh=False, verbose=False):
+def open_workflow(workflow: Workflow, *, application_path=None, reuse_views=True, log_level="INFO"):
     """Validate and open a workflow using explicit Python options."""
-    configure_logging(verbose)
+    configure_logging(log_level)
     started = time.monotonic()
     validate(workflow)
     if sys.platform != "darwin":
         raise RuntimeError("GaussView UI automation requires macOS")
     app = (
-        (Path(app) if app is not None else Path.home() / "Applications/GaussView6/gview.app")
+        (
+            Path(application_path)
+            if application_path is not None
+            else Path.home() / "Applications/GaussView6/gview.app"
+        )
         .expanduser()
         .resolve()
     )
     if not (app / "Contents/MacOS/gview").is_file():
         raise ValueError(f"GaussView executable not found in {app}")
-    viewer, groups, reused = launch(workflow, app, fresh)
+    viewer, groups, reused = launch(workflow, app, reuse_views=reuse_views)
     LOG.info(
         "viewer_ready",
         extra={

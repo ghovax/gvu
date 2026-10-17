@@ -27,7 +27,13 @@ uv sync --extra docs
 uv run --extra docs sphinx-build -W --keep-going -b html docs docs/_build/html
 ```
 
-Open `docs/_build/html/index.html`. The generated site includes sidebar navigation, breadcrumbs, search, previous/next links, a Python index and source views. Generated HTML stays under the ignored `_build` directory; maintain the source pages and package docstrings.
+Open `docs/_build/html/index.html`. The generated site includes:
+
+- Sidebar navigation and breadcrumbs.
+- Search and previous/next links.
+- A Python index and source views.
+
+Generated HTML stays under the ignored `_build` directory; maintain the source pages and package docstrings.
 
 The root `.readthedocs.yaml` configures Python, installation of the `docs` extra, the Sphinx configuration and warning-sensitive builds. A Read the Docs project can import this public repository to run those builds. GitHub Pages publishes the same Sphinx site through the documentation workflow.
 
@@ -37,7 +43,12 @@ The root `.readthedocs.yaml` configures Python, installation of the `docs` extra
 uv run python -m unittest discover -s tests
 ```
 
-Build with warnings treated as errors after changing documentation or public API signatures. Review the API reference, menu tables, sidebar links and search output in the generated site. Test new native controls against the installed application using temporary fixtures and close only the views those probes own. Keep the [coverage record](coverage.md) consistent with what was actually exercised.
+After changing documentation or public API signatures:
+
+1. Build with warnings treated as errors.
+2. Review the API reference, menu tables, sidebar links and search output in the generated site.
+3. Test new native controls against the installed application using temporary fixtures. Close only the views those probes own.
+4. Keep the [coverage record](coverage.md) consistent with what was actually exercised.
 
 ## Documentation sources
 
@@ -50,7 +61,14 @@ Build with warnings treated as errors after changing documentation or public API
 
 The `publish.yml` workflow uses PyPI Trusted Publishing with the GitHub environment `pypi`. Configure a pending publisher on PyPI with project `gvu`, owner `ghovax`, repository `gvu`, workflow `publish.yml` and environment `pypi`. This is required once, before the first upload; no long-lived API token is needed.
 
-Update the version in `pyproject.toml`, refresh `uv.lock`, run the checks and build both distributions with `uv build --no-sources`. The tag must match the package version, for example `v0.3.0`. Pushing that tag runs the release workflow: build, metadata checks, wheel/source-install smoke tests, attestations and trusted upload. A PyPI release version cannot be replaced; subsequent changes require a new version.
+To prepare a release:
+
+1. Update the version in `pyproject.toml` and refresh `uv.lock`.
+2. Run the checks and build both distributions with `uv build --no-sources`.
+3. Create a tag matching the package version, for example `v0.3.0`.
+4. Push the tag to run the release workflow. It builds distributions, checks metadata, runs wheel/source-install smoke tests, generates attestations and performs the trusted upload.
+
+A PyPI release version cannot be replaced; subsequent changes require a new version.
 
 ```bash
 uv lock

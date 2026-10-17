@@ -32,14 +32,19 @@ class Session:
         self._owned_groups = list(groups) if owned else []
 
     @classmethod
-    def open(cls, workflow, app=None, fresh=False):
+    def open(cls, workflow, *, application_path=None, reuse_views=True):
+        """Open declared views, reusing matches unless reuse_views is False."""
         validate(workflow)
         app = (
-            Path(app or Path.home() / "Applications/GaussView6/gview.app")
+            Path(
+                application_path
+                if application_path is not None
+                else Path.home() / "Applications/GaussView6/gview.app"
+            )
             .expanduser()
             .resolve()
         )
-        backend, groups, reused = launch(workflow, app, fresh)
+        backend, groups, reused = launch(workflow, app, reuse_views=reuse_views)
         LOG.info(
             "session_opened",
             extra={
@@ -53,19 +58,22 @@ class Session:
         return cls(backend, groups, owned=not reused)
 
     @classmethod
-    def attach(cls, app=None):
+    def attach(cls, *, application_path=None):
+        """Attach to the running application selected by its bundle path."""
         from .macos import MacViewer
 
         app = (
-            Path(app or Path.home() / "Applications/GaussView6/gview.app")
+            Path(
+                application_path
+                if application_path is not None
+                else Path.home() / "Applications/GaussView6/gview.app"
+            )
             .expanduser()
             .resolve()
         )
         pids = application_pids(app / "Contents/MacOS/gview")
         if len(pids) != 1:
-            raise ActionUnavailable(
-                "Attach requires exactly one running GaussView instance"
-            )
+            raise ActionUnavailable("Attach requires exactly one running GaussView instance")
         return cls(MacViewer(pids[0], None, app))
 
     def load(self, paths, grouping=Grouping.SEPARATE, read_intermediates=False):

@@ -4,7 +4,17 @@
 
 The tested installation is macOS GaussView 6.0.16. Unit tests cover menu hierarchy and state, ambiguity, ownership, input validation, display placement, snapshot restoration, structured logging and numerical ESP-grid analysis. Existing research workflows passed their data preflight; that validates declared data without exercising every native control.
 
-Live checks exercised grouped geometry loading, native axis alignment, fitting/centering, camera rotation, selected-window placement, owned-group cleanup, frame selection/playback, mapped ESP surfaces, structure/image export, vibration selection/scrolling/playback and native optimization-plot data export. Menu checks covered all ten application roots, Help-name normalization, Settings discovery/opening, disabled-parent state and a labels toggle restored to its original state. Preference category and native-control inspection and closure also passed.
+Live checks covered:
+
+- Grouped geometry loading and owned-group cleanup.
+- Native axis alignment, fitting/centering and camera rotation.
+- Selected-window placement and frame selection/playback.
+- Mapped ESP surfaces and structure/image export.
+- Vibration selection, scrolling and playback.
+- Native optimization-plot data export.
+- All ten application menu roots, Help-name normalization and disabled-parent state.
+- Settings discovery/opening and a labels toggle restored to its original state.
+- Preference category discovery, native-control inspection and closure.
 
 ## Incomplete or unverified operations
 
@@ -28,7 +38,7 @@ Live checks exercised grouped geometry loading, native axis alignment, fitting/c
 | Ambiguous label or changed native control | Inspect the current dialog again; do not reuse a descriptor after changing its layout. |
 | Preference navigation fails | The requested page's content was not verified. Inspect it manually rather than treating the old page as the new one. |
 | Export refuses a path | Choose a non-existing file in an existing parent directory. |
-| Open views retain prior styling | Reuse preserves manual changes; use `workflow.view(fresh=True)` to request reconstruction. |
+| Open views retain prior styling | Reuse preserves manual changes; use `workflow.view(reuse_views=False)` to request reconstruction. |
 
 ## Reuse and scientific interpretation
 
@@ -38,4 +48,4 @@ Bonds displayed by GaussView can be inferred from geometry or read from connecti
 
 ## Logs
 
-GVU emits JSON Lines to stderr with UTC timestamps, severity, process ID, event and relevant metadata. Default output records essential opening, scale and failure events; `workflow.view(verbose=True)` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.
+GVU emits JSON Lines to stderr with UTC timestamps, severity, process ID, event and relevant metadata. Default output records essential opening, scale and failure events; `workflow.view(log_level="DEBUG")` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.

@@ -2,17 +2,30 @@
 
 The installed GaussView 6.0.16 menu bar is addressed through `Session.menus()`, `action(*path)` and `invoke(*path)`. Paths include every submenu component. `ModelView.menus()` and `invoke()` first select that molecule group, so availability belongs to the intended model.
 
-`enabled` includes disabled ancestors, while `native_enabled` records the item's own flag. `checked` is true or false for recognized toggles and radio choices, and `None` for ordinary commands without a native mark. `kind` is `action`, `submenu`, `toggle` or `radio`. `shortcut` preserves the native character, modifier mask, glyph and virtual key where exposed. `mark` preserves the native selection mark. `set_menu(*path, checked=True)` verifies the resulting state; radio choices are changed by selecting another item.
+Menu descriptors expose the following state:
+
+- `enabled` includes disabled ancestors; `native_enabled` records the item's own flag.
+- `checked` is true or false for recognized toggles and radio choices, and `None` for ordinary commands without a native mark.
+- `kind` is `action`, `submenu`, `toggle` or `radio`.
+- `shortcut` preserves the native character, modifier mask, glyph and virtual key where exposed.
+- `mark` preserves the native selection mark.
+
+`set_menu(*path, checked=True)` verifies the resulting state. Radio choices are changed by selecting another item.
 
 Selection, loaded data, current dialog and installed Gaussian/Ampac capabilities determine which commands are enabled. Recent files, services, molecule groups and window names are read dynamically. The Apple menu is a macOS menu outside this application's default catalog; it can be inspected explicitly with `menus("Apple")`.
 
-A successful menu dispatch does not establish that every control in the resulting dialog is automated. `Dialog.controls()` reports native controls, values, writable attributes and supported actions; `perform()` and `set_value()` reject unavailable native operations. `Dialog.labels()` reads rendered text separately. An OCR label does not prove a control's enabled state, type or value. GaussView's custom Qt panels often expose only an `AXUnknown` region rather than their internal widgets.
+A successful menu dispatch does not establish that every control in the resulting dialog is automated:
+
+- `Dialog.controls()` reports native controls, values, writable attributes and supported actions.
+- `perform()` and `set_value()` reject unavailable native operations.
+- `Dialog.labels()` reads rendered text separately. An OCR label does not prove a control's enabled state, type or value.
+- GaussView's custom Qt panels often expose only an `AXUnknown` region rather than their internal widgets.
 
 The menu names below were checked against the running application and its bundled `help/gvmenu.htm`. Dynamic entries are represented by their parent, and remain available through the live API.
 
 ## GaussView
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | About GaussView | `action` |
 | Settings… | `action` |
@@ -24,7 +37,7 @@ The menu names below were checked against the running application and its bundle
 
 ## File
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | New Molecule Group | `action` |
 | Add to Molecule Group | `action` |
@@ -45,7 +58,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Edit
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Undo | `action` |
 | Redo | `action` |
@@ -67,7 +80,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Tools
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Atom List... | `action` |
 | Redundant Coordinates... | `action` |
@@ -84,7 +97,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Builder
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Element Fragment... | `action` |
 | Ring Fragment... | `action` |
@@ -108,7 +121,7 @@ The menu names below were checked against the running application and its bundle
 
 ## View
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Show Tab Bar | `action` |
 | Show All Tabs | `action` |
@@ -129,7 +142,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Calculate
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Gaussian Calculation Setup... | `action` |
 | Gaussian Quick Launch | `submenu` |
@@ -160,7 +173,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Results
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Summary... | `action` |
 | Charge Distribution... | `action` |
@@ -190,7 +203,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Windows
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | Show Molecule Groups | `submenu` |
 | Minimize All | `action` |
@@ -205,7 +218,7 @@ The menu names below were checked against the running application and its bundle
 
 ## Help
 
-| Path within menu | `kind` |
+| Path within menu | Item type |
 | --- | --- |
 | GaussView Help... | `action` |
 | Menus and Icons | `action` |
@@ -217,8 +230,29 @@ The menu names below were checked against the running application and its bundle
 
 ## Preferences
 
-`Session.settings()` discovers the application settings command and opens GaussView Preferences. `pages()` indexes all 17 categories below. `page(name)` requires a visible content change and reports `ActionUnavailable` if navigation cannot be verified. `cancel()` closes without applying; `apply()` selects Ok and verifies closure.
+`Session.settings()` discovers the application settings command and opens GaussView Preferences:
+
+- `pages()` indexes all 17 categories below.
+- `page(name)` requires a visible content change and reports `ActionUnavailable` if navigation cannot be verified.
+- `cancel()` closes without applying.
+- `apply()` selects Ok and verifies closure.
 
 The current live check verified opening, category discovery and native closure. Page navigation through the rendered list failed its content-change check; individual settings fields and applying changed values are not verified. Treat them as incomplete automation until tested, rather than inferring full support from the menu entry.
 
-Ampac Setup, Building, Charge Distribution, Clean Controls, Custom Bonding Parameters, Colors, Display Format, File/Directory, Font, Gaussian Setup, Icons, Image, Job Setup, Movie, Animation, Print, Vibrations, Window Behavior.
+- Ampac Setup
+- Building
+- Charge Distribution
+- Clean Controls
+- Custom Bonding Parameters
+- Colors
+- Display Format
+- File/Directory
+- Font
+- Gaussian Setup
+- Icons
+- Image
+- Job Setup
+- Movie, Animation
+- Print
+- Vibrations
+- Window Behavior

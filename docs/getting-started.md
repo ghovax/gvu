@@ -2,7 +2,14 @@
 
 ## Requirements
 
-The tested target is macOS GaussView 6.0.16, installed at `~/Applications/GaussView6/gview.app`. Install [uv](https://docs.astral.sh/uv/) and allow Accessibility and Screen Recording for the terminal or application invoking Python. Existing Gaussian files must be available locally. GVU opens results and prepares displays; running the examples does not submit a Gaussian job.
+Requirements for the tested setup:
+
+- macOS GaussView 6.0.16 at `~/Applications/GaussView6/gview.app`.
+- [uv](https://docs.astral.sh/uv/) for installation and script execution.
+- Accessibility and Screen Recording permissions for the terminal or application invoking Python.
+- Existing Gaussian files available locally.
+
+GVU opens results and prepares displays; running the examples does not submit a Gaussian job.
 
 Install GVU from PyPI in a project with `uv add gvu`, or use the inline metadata below to let `uv run viewer.py` install it automatically. A source checkout is needed only for development; see the [development guide](development.md). Importing the library and building its documentation also work on Linux, but interactive viewer controls require macOS.
 
@@ -19,11 +26,17 @@ Configure the workflow through Python methods in the script:
 ```python
 workflow.validate()
 workflow.view()
-workflow.view(fresh=True, verbose=True)
-workflow.view(app=Path("/path/to/gview.app"))
+workflow.view(reuse_views=False, log_level="DEBUG")
+workflow.view(application_path=Path("/path/to/gview.app"))
 ```
 
-`validate()` checks required files and applicable result markers without opening GaussView. `view()` validates before opening, reuses matching views by default, and accepts an application bundle and diagnostic logging options. Errors propagate to the calling script.
+- `validate()` checks required files and applicable result markers without opening GaussView.
+- `view()` validates before opening and reuses matching views by default.
+- `reuse_views=False` requests new views; the default `True` reuses matching open views.
+- `log_level="DEBUG"` enables diagnostic logging; `"INFO"` is the default. Standard numeric logging levels are also accepted.
+- `application_path=Path(...)` selects an application bundle.
+
+Errors propagate to the calling script.
 
 Ignored checkpoints and cube grids may need to be obtained separately from the calculation server. A Git checkout alone may not contain all of a workflow's data.
 

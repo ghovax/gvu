@@ -26,9 +26,9 @@ class JsonLineFormatter(logging.Formatter):
         return json.dumps(entry, ensure_ascii=False, default=str)
 
 
-def configure_logging(verbose=False):
+def configure_logging(log_level="INFO"):
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(JsonLineFormatter())
     LOG.handlers[:] = [handler]
-    LOG.setLevel(logging.DEBUG if verbose else logging.INFO)
+    LOG.setLevel(log_level)
     LOG.propagate = False
