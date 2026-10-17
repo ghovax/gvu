@@ -169,16 +169,26 @@ class Workflow:
             *(p for s in self.surfaces for p in (s.density, s.potential)),
         )
 
-    def view(self, argv: list[str] | None = None):
-        """Open this workflow with the shared viewer command-line options.
+    def validate(self):
+        """Validate required files and result markers without opening GaussView.
+
+        Raises ValueError for missing data or invalid workflow settings.
+        """
+        from .viewer import validate
+
+        validate(self)
+
+    def view(self, *, app: Path | None = None, fresh: bool = False, verbose: bool = False):
+        """Open this workflow in GaussView.
 
         Args:
-            argv: Command-line arguments such as ``["--check"]``. When omitted,
-                read the arguments supplied to the calling viewer script.
+            app: Application bundle; defaults to ~/Applications/GaussView6/gview.app.
+            fresh: Open new views instead of reusing this workflow's existing views.
+            verbose: Include diagnostic JSON Lines events on stderr.
 
-        The ``--check`` option validates data without opening GaussView.
-        ``--new`` requests fresh views; ``--app`` selects an installation.
+        Validates the workflow before opening windows. Failures raise their original
+        exceptions for the caller to handle. Process arguments are never inspected.
         """
-        from .viewer import run_workflow
+        from .viewer import open_workflow
 
-        return run_workflow(self, argv)
+        return open_workflow(self, app=app, fresh=fresh, verbose=verbose)

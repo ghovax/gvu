@@ -1,6 +1,5 @@
 """Structured stderr logging shared by all viewers."""
 
-import argparse
 import json
 import logging
 import sys
@@ -33,9 +32,3 @@ def configure_logging(verbose=False):
     LOG.handlers[:] = [handler]
     LOG.setLevel(logging.DEBUG if verbose else logging.INFO)
     LOG.propagate = False
-
-
-class ArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        LOG.error("invalid_arguments", extra={"metadata": {"reason": message}})
-        self.exit(2)

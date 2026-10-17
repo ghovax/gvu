@@ -28,7 +28,7 @@ Live checks exercised grouped geometry loading, native axis alignment, fitting/c
 | Ambiguous label or changed native control | Inspect the current dialog again; do not reuse a descriptor after changing its layout. |
 | Preference navigation fails | The requested page's content was not verified. Inspect it manually rather than treating the old page as the new one. |
 | Export refuses a path | Choose a non-existing file in an existing parent directory. |
-| Open views retain prior styling | Reuse preserves manual changes; use `--new` to request reconstruction. |
+| Open views retain prior styling | Reuse preserves manual changes; use `workflow.view(fresh=True)` to request reconstruction. |
 
 ## Reuse and scientific interpretation
 
@@ -38,4 +38,4 @@ Bonds displayed by GaussView can be inferred from geometry or read from connecti
 
 ## Logs
 
-GVU emits JSON Lines to stderr with UTC timestamps, severity, process ID, event and relevant metadata. Default output records essential opening, scale and failure events; `--verbose` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.
+GVU emits JSON Lines to stderr with UTC timestamps, severity, process ID, event and relevant metadata. Default output records essential opening, scale and failure events; `workflow.view(verbose=True)` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.

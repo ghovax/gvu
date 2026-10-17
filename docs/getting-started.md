@@ -14,12 +14,16 @@ A calculation directory can include a `scripts/viewer.py` entry point. Run its e
 uv run /absolute/path/to/project/runs/<timestamp>/scripts/viewer.py
 ```
 
-| Option | Effect |
-| --- | --- |
-| `--check` | Validate files and applicable result markers without opening GaussView |
-| `--new` | Request fresh views rather than reusing configured results |
-| `--verbose` | Include diagnostic JSON Lines events on stderr |
-| `--app /path/to/gview.app` | Select another application installation |
+Configure the workflow through Python methods in the script:
+
+```python
+workflow.validate()
+workflow.view()
+workflow.view(fresh=True, verbose=True)
+workflow.view(app=Path("/path/to/gview.app"))
+```
+
+`validate()` checks required files and applicable result markers without opening GaussView. `view()` validates before opening, reuses matching views by default, and accepts an application bundle and diagnostic logging options. Errors propagate to the calling script.
 
 Ignored checkpoints and cube grids may need to be obtained separately from the calculation server. A Git checkout alone may not contain all of a workflow's data.
 
@@ -50,4 +54,4 @@ if __name__ == "__main__":
     main()
 ```
 
-Choose results that the calculation actually contains. Use only `source` for an input-geometry viewer. Run `--check` first, then open the viewer. The [viewing guide](workflows.md) explains surfaces, comparisons and ownership; the [menu guide](controls.md) explains actions outside the specialized helpers.
+Choose results that the calculation actually contains. Use only `source` for an input-geometry viewer. Call `workflow.validate()` to check data without opening windows. The [viewing guide](workflows.md) explains surfaces, comparisons and ownership; the [menu guide](controls.md) explains actions outside the specialized helpers.

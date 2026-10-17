@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from .files import input_paths
-from .logging import LOG, ArgumentParser, configure_logging
+from .logging import LOG, configure_logging
 from .models import Workflow
 from .surfaces import color_range
 
@@ -16,9 +16,7 @@ def validate(workflow):
     missing = [str(p) for p in workflow.files if not p.is_file()]
     if missing:
         raise ValueError("Missing existing calculation data: " + ", ".join(missing))
-    if not workflow.source.is_absolute() or any(
-        not p.is_absolute() for p in workflow.files
-    ):
+    if not workflow.source.is_absolute() or any(not p.is_absolute() for p in workflow.files):
         raise ValueError("Workflow data paths must be absolute")
     names = [s.name for s in workflow.surfaces]
     if len(names) != len(set(names)):
@@ -31,12 +29,7 @@ def validate(workflow):
     if workflow.results:
         roles.add("plot")
     for role, position, size in workflow.layout:
-        if (
-            role not in roles
-            or len(position) != 2
-            or len(size) != 2
-            or any(v <= 0 for v in size)
-        ):
+        if role not in roles or len(position) != 2 or len(size) != 2 or any(v <= 0 for v in size):
             raise ValueError(f"Invalid layout entry: {role}")
     input_paths(workflow.files)
     text = (
@@ -66,8 +59,7 @@ def application_pids(executable):
     return [
         int(parts[0])
         for line in result.stdout.splitlines()
-        if len(parts := line.strip().split(None, 1)) == 2
-        and parts[1] == str(executable)
+        if len(parts := line.strip().split(None, 1)) == 2 and parts[1] == str(executable)
     ]
 
 
@@ -90,9 +82,7 @@ def reusable_groups(viewer):
             continue
         start = int(match.group(1))
         source_group = f"G{start}:"
-        groups = [
-            f"G{start + offset}:" for offset in range(1, len(workflow.surfaces) + 1)
-        ]
+        groups = [f"G{start + offset}:" for offset in range(1, len(workflow.surfaces) + 1)]
         if all(group in mapped_groups for group in groups):
             return [source_group, *groups]
     return None
@@ -118,15 +108,11 @@ def launch(workflow, app, fresh=False):
         )
     executable = app / "Contents/MacOS/gview"
     bounds = (
-        color_range(workflow.surfaces, workflow.density_isovalue)
-        if workflow.surfaces
-        else None
+        color_range(workflow.surfaces, workflow.density_isovalue) if workflow.surfaces else None
     )
     pids = application_pids(executable)
     if len(pids) > 1:
-        raise RuntimeError(
-            "Close duplicate GaussView app instances before running this launcher"
-        )
+        raise RuntimeError("Close duplicate GaussView app instances before running this launcher")
     if not fresh and pids:
         process_started = subprocess.run(
             ["ps", "-p", str(pids[0]), "-o", "lstart="],
@@ -135,15 +121,11 @@ def launch(workflow, app, fresh=False):
             check=True,
             timeout=5,
         ).stdout.strip()
-        process_start = time.mktime(
-            time.strptime(process_started, "%a %b %d %H:%M:%S %Y")
-        )
+        process_start = time.mktime(time.strptime(process_started, "%a %b %d %H:%M:%S %Y"))
         if all(p.stat().st_mtime < process_start for p in workflow.files):
             viewer = MacViewer(pids[0], workflow, app, bounds)
             groups = reusable_groups(viewer)
-            if groups and all(
-                viewer.result_window(groups[0], r) for r in workflow.results
-            ):
+            if groups and all(viewer.result_window(groups[0], r) for r in workflow.results):
                 viewer.group_ids.update(groups)
                 try:
                     for group in groups[1:]:
@@ -163,9 +145,7 @@ def launch(workflow, app, fresh=False):
     # Start the normal app before configuring file-reading options.
     if not pids:
         subprocess.run(["open", "-a", str(app)], check=True, timeout=15)
-    pid = wait_for(
-        lambda: next(iter(application_pids(executable)), None), "GaussView process"
-    )
+    pid = wait_for(lambda: next(iter(application_pids(executable)), None), "GaussView process")
     viewer = MacViewer(pid, workflow, app, bounds)
     application = AXUIElementCreateApplication(pid)
 
@@ -227,21 +207,15 @@ def launch(workflow, app, fresh=False):
             if not window.get("kCGWindowName"):
                 labels = [t[0] for t in viewer.read(window)]
                 if any(
-                    "Failure reading" in t
-                    or "Error reading" in t
-                    or "Unknown file type" in t
+                    "Failure reading" in t or "Error reading" in t or "Unknown file type" in t
                     for t in labels
                 ):
-                    raise RuntimeError(
-                        "GaussView rejected the input: " + "; ".join(labels)
-                    )
+                    raise RuntimeError("GaussView rejected the input: " + "; ".join(labels))
         return all(opened(p) for p in [workflow.source, *density_files])
 
     wait_for(ready, "source and density files", timeout=45)
     source_group = opened(workflow.source)["kCGWindowName"].split(":")[0] + ":"
-    surface_groups = [
-        opened(p)["kCGWindowName"].split(":")[0] + ":" for p in density_files
-    ]
+    surface_groups = [opened(p)["kCGWindowName"].split(":")[0] + ":" for p in density_files]
     groups = [source_group, *surface_groups]
     viewer.group_ids.update(groups)
     for surface, group in zip(workflow.surfaces, surface_groups, strict=True):
@@ -274,74 +248,30 @@ def launch(workflow, app, fresh=False):
     return viewer, groups, False
 
 
-def run_workflow(workflow: Workflow, argv=None):
-    """Execute the command-line interface selected by Workflow.view."""
-    configure_logging()
-    parser = ArgumentParser(
-        description="Open this run's existing results in macOS GaussView 6."
-    )
-    parser.add_argument(
-        "--app", type=Path, default=Path.home() / "Applications/GaussView6/gview.app"
-    )
-    parser.add_argument(
-        "--new",
-        action="store_true",
-        help="open fresh views instead of reusing open results",
-    )
-    parser.add_argument(
-        "--verbose", action="store_true", help="include diagnostic JSON Lines events"
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="validate the declared data without opening GaussView",
-    )
-    args = parser.parse_args(argv)
-    configure_logging(args.verbose)
+def open_workflow(workflow: Workflow, *, app=None, fresh=False, verbose=False):
+    """Validate and open a workflow using explicit Python options."""
+    configure_logging(verbose)
     started = time.monotonic()
-    try:
-        validate(workflow)
-        if args.check:
-            LOG.info(
-                "workflow_validated",
-                extra={
-                    "metadata": {
-                        "source": workflow.source,
-                        "results": [r.name for r in workflow.results],
-                        "surfaces": [s.name for s in workflow.surfaces],
-                        "files": len(workflow.files),
-                    }
-                },
-            )
-            return
-        if sys.platform != "darwin":
-            raise RuntimeError("GaussView UI automation requires macOS")
-        app = args.app.expanduser().resolve()
-        if not (app / "Contents/MacOS/gview").is_file():
-            raise ValueError(f"GaussView executable not found in {app}")
-        viewer, groups, reused = launch(workflow, app, args.new)
-        LOG.info(
-            "viewer_ready",
-            extra={
-                "metadata": {
-                    "source": workflow.source,
-                    "viewer_pid": viewer.pid,
-                    "reused": reused,
-                    "groups": groups,
-                    "elapsed_seconds": round(time.monotonic() - started, 3),
-                }
-            },
-        )
-    except Exception as error:  # noqa: BLE001 - CLI boundary logs backend failures.
-        LOG.error(
-            "viewer_failed",
-            extra={
-                "metadata": {
-                    "error_type": type(error).__name__,
-                    "reason": str(error),
-                    "source": workflow.source,
-                }
-            },
-            exc_info=True,
-        )
-        sys.exit(1)
+    validate(workflow)
+    if sys.platform != "darwin":
+        raise RuntimeError("GaussView UI automation requires macOS")
+    app = (
+        (Path(app) if app is not None else Path.home() / "Applications/GaussView6/gview.app")
+        .expanduser()
+        .resolve()
+    )
+    if not (app / "Contents/MacOS/gview").is_file():
+        raise ValueError(f"GaussView executable not found in {app}")
+    viewer, groups, reused = launch(workflow, app, fresh)
+    LOG.info(
+        "viewer_ready",
+        extra={
+            "metadata": {
+                "source": workflow.source,
+                "viewer_pid": viewer.pid,
+                "reused": reused,
+                "groups": groups,
+                "elapsed_seconds": round(time.monotonic() - started, 3),
+            }
+        },
+    )

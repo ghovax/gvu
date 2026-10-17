@@ -33,7 +33,7 @@ if __name__ == "__main__":
     main()
 ```
 
-Run it with `uv run viewer.py`. Use `--check` for data preflight, `--new` to request fresh views and `--verbose` for diagnostic JSON Lines events.
+Run it with `uv run viewer.py`. Use `workflow.validate()` for data validation, or `workflow.view(fresh=True, verbose=True)` to open fresh views with diagnostic JSON Lines events. Select an installation with `workflow.view(app=Path("/path/to/gview.app"))`.
 
 ## Documentation
 

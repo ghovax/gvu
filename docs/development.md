@@ -9,10 +9,10 @@
 | `src/gvu/menus.py` | Native menu discovery, state and dispatch |
 | `src/gvu/controls.py` | Native dialog-control descriptors and resolution |
 | `src/gvu/macos.py` | Process-scoped macOS UI backend |
-| `src/gvu/viewer.py` | Workflow validation, launch/reuse and command-line entry point |
+| `src/gvu/viewer.py` | Workflow validation and launch/reuse |
 | `src/gvu/surfaces.py` | Live density-boundary ESP analysis |
 | `src/gvu/desktop.py` | Display-independent placement calculations |
-| `src/gvu/logging.py` | Structured events and CLI error handling |
+| `src/gvu/logging.py` | Structured events and logging configuration |
 | `tests/` | Unit tests with temporary fixtures |
 | `docs/` | Sphinx sources and Read the Docs theme configuration |
 

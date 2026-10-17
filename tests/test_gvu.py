@@ -17,9 +17,7 @@ from gvu.viewer import reusable_groups, validate
 def cube(path, values, origin=(-4, -4, -4), step=0.25):
     with path.open("w") as stream:
         stream.write(
-            "synthetic test field\nnot a calculation\n1 "
-            + " ".join(map(str, origin))
-            + "\n"
+            "synthetic test field\nnot a calculation\n1 " + " ".join(map(str, origin)) + "\n"
         )
         for axis, size in enumerate(values.shape):
             vector = [0.0, 0.0, 0.0]
@@ -39,16 +37,10 @@ class ScientificRangeTests(unittest.TestCase):
             density = np.exp(-(x * x + y * y + z * z))
             cube(root / "density.cube", density)
             cube(root / "potential.cube", x)
-            surface = Surface(
-                "synthetic", root / "density.cube", root / "potential.cube"
-            )
-            np.testing.assert_allclose(
-                surface_range(surface, np.exp(-4)), (-2, 2), atol=1e-5
-            )
+            surface = Surface("synthetic", root / "density.cube", root / "potential.cube")
+            np.testing.assert_allclose(surface_range(surface, np.exp(-4)), (-2, 2), atol=1e-5)
             cube(surface.potential, x + 3)
-            np.testing.assert_allclose(
-                surface_range(surface, np.exp(-4)), (1, 5), atol=1e-5
-            )
+            np.testing.assert_allclose(surface_range(surface, np.exp(-4)), (1, 5), atol=1e-5)
 
     def test_grid_mismatch(self):
         """Reject density and potential cubes with different grid dimensions."""
@@ -67,19 +59,20 @@ class WorkflowTests(unittest.TestCase):
     def test_view_check(self):
         """Validate through the workflow method without launching a native app."""
         from unittest.mock import patch
+
         with TemporaryDirectory() as directory:
             source = Path(directory) / "model.gjf"
             source.write_text("# PM6\n\nExample\n\n0 1\nH 0 0 0\n\n")
             stream = io.StringIO()
             with patch("gvu.viewer.launch") as launch, contextlib.redirect_stderr(stream):
-                Workflow(source).view(["--check"])
+                Workflow(source).validate()
             launch.assert_not_called()
-            records = [json.loads(line) for line in stream.getvalue().splitlines()]
-            self.assertEqual(records[-1]["event"], "workflow_validated")
+            self.assertEqual(stream.getvalue(), "")
 
     def test_view_options(self):
         """Preserve application selection and fresh-view options through the method."""
         from unittest.mock import patch
+
         with TemporaryDirectory() as directory:
             source = Path(directory) / "model.gjf"
             source.write_text("# PM6\n\nExample\n\n0 1\nH 0 0 0\n\n")
@@ -89,9 +82,46 @@ class WorkflowTests(unittest.TestCase):
             executable.touch()
             workflow = Workflow(source)
             result = (SimpleNamespace(pid=123), ["G1:"], False)
-            with patch("gvu.viewer.sys.platform", "darwin"), patch("gvu.viewer.launch", return_value=result) as launch, contextlib.redirect_stderr(io.StringIO()):
-                workflow.view(["--app", str(app), "--new"])
+            with (
+                patch("gvu.viewer.sys.platform", "darwin"),
+                patch("gvu.viewer.launch", return_value=result) as launch,
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                workflow.view(app=app, fresh=True)
             launch.assert_called_once_with(workflow, app.resolve(), True)
+
+    def test_process_args(self):
+        """Ignore host process arguments when opening a workflow."""
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "model.gjf"
+            source.write_text("# PM6\n\nExample\n\n0 1\nH 0 0 0\n\n")
+            app = Path(directory) / "gview.app"
+            executable = app / "Contents/MacOS/gview"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            result = (SimpleNamespace(pid=123), ["G1:"], False)
+            with (
+                patch("sys.argv", ["host", "--unrelated"]),
+                patch("gvu.viewer.sys.platform", "darwin"),
+                patch("gvu.viewer.launch", return_value=result),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                Workflow(source).view(app=app, verbose=True)
+                self.assertEqual(LOG.level, 10)
+
+    def test_view_failure(self):
+        """Let callers handle errors without process exit or duplicate logging."""
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "missing.gjf"
+            stream = io.StringIO()
+            with (
+                contextlib.redirect_stderr(stream),
+                self.assertRaisesRegex(ValueError, "Missing existing calculation data"),
+            ):
+                Workflow(source).view()
+            self.assertEqual(stream.getvalue(), "")
 
     def test_missing_data(self):
         """Reject a requested property absent from the log before opening the UI."""
@@ -111,9 +141,7 @@ class WorkflowTests(unittest.TestCase):
         workflow = Workflow(source, (Result.IRC,), surfaces)
         windows = [{"kCGWindowName": f"G7:M1:V1 - irc.log ({source})"}]
         windows += [
-            {
-                "kCGWindowName": f"G{n}:M1:V1 - Density ( isoval = 0.002 ; [mapped with ESP] )"
-            }
+            {"kCGWindowName": f"G{n}:M1:V1 - Density ( isoval = 0.002 ; [mapped with ESP] )"}
             for n in (8, 9, 10)
         ]
         viewer = SimpleNamespace(workflow=workflow, windows=lambda: windows)
@@ -127,9 +155,7 @@ class WorkflowTests(unittest.TestCase):
         with contextlib.redirect_stderr(stream):
             configure_logging()
             LOG.debug("hidden")
-            LOG.info(
-                "sample", extra={"metadata": {"path": Path("/example"), "text": "a\nb"}}
-            )
+            LOG.info("sample", extra={"metadata": {"path": Path("/example"), "text": "a\nb"}})
             try:
                 raise RuntimeError("multiline\nerror")
             except RuntimeError:
