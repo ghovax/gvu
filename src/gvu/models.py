@@ -1,6 +1,6 @@
 """The run-specific inputs to a shared GaussView workflow."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -142,9 +142,11 @@ class Screen:
 
 @dataclass(frozen=True)
 class Surface:
+    """Named density/ESP cube pair with explicitly labeled file arguments."""
+
     name: str
-    density: Path
-    potential: Path
+    density: Path = field(kw_only=True)
+    potential: Path = field(kw_only=True)
 
 
 @dataclass(frozen=True)

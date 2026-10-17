@@ -37,10 +37,24 @@ class ScientificRangeTests(unittest.TestCase):
             density = np.exp(-(x * x + y * y + z * z))
             cube(root / "density.cube", density)
             cube(root / "potential.cube", x)
-            surface = Surface("synthetic", root / "density.cube", root / "potential.cube")
+            surface = Surface(
+                "synthetic", density=root / "density.cube", potential=root / "potential.cube"
+            )
             np.testing.assert_allclose(surface_range(surface, np.exp(-4)), (-2, 2), atol=1e-5)
             cube(surface.potential, x + 3)
             np.testing.assert_allclose(surface_range(surface, np.exp(-4)), (1, 5), atol=1e-5)
+
+    def test_surface_keywords(self):
+        """Require labeled density and potential arguments in a surface pair."""
+        density, potential = Path("density.cube"), Path("potential.cube")
+        surface = Surface("state", density=density, potential=potential)
+        self.assertEqual((surface.density, surface.potential), (density, potential))
+        with self.assertRaises(TypeError):
+            Surface("state", density, potential)
+        with self.assertRaises(TypeError):
+            Surface("state", density, potential=potential)
+        with self.assertRaises(TypeError):
+            Surface("state", density=density)
 
     def test_grid_mismatch(self):
         """Reject density and potential cubes with different grid dimensions."""
@@ -50,7 +64,9 @@ class ScientificRangeTests(unittest.TestCase):
             cube(root / "potential.cube", np.ones((4, 3, 3)))
             with self.assertRaisesRegex(ValueError, "grids do not match"):
                 surface_range(
-                    Surface("mismatch", root / "density.cube", root / "potential.cube"),
+                    Surface(
+                        "mismatch", density=root / "density.cube", potential=root / "potential.cube"
+                    ),
                     0.002,
                 )
 
@@ -173,7 +189,7 @@ class WorkflowTests(unittest.TestCase):
         """Recognize a complete mapped group block without source filenames."""
         source = Path("/runs/irc.log")
         surfaces = tuple(
-            Surface(n, Path(n + "-density.cube"), Path(n + "-potential.cube"))
+            Surface(n, density=Path(n + "-density.cube"), potential=Path(n + "-potential.cube"))
             for n in ("reverse", "ts", "forward")
         )
         workflow = Workflow(source, (Result.IRC,), surfaces)

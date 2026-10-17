@@ -86,7 +86,7 @@ Mode indices also start at one. Mode selection can scroll the native table. A re
 
 ## Density surfaces and ESP
 
-Declare paired `Surface(name, density, potential)` files in a `Workflow`. Use the same density boundary and opacity for compared states. The library derives shared color limits live by evaluating the potential on the exterior density boundary; it does not use cached scale reports. Grid dimensions and geometry provenance must remain consistent with the calculation.
+Declare paired `Surface(name, density=density_path, potential=potential_path)` files in a `Workflow`. Both file arguments are required and keyword-only. Use the same density boundary and opacity for compared states. The library derives shared color limits live by evaluating the potential on the exterior density boundary; it does not use cached scale reports. Grid dimensions and geometry provenance must remain consistent with the calculation.
 
 ```python
 from pathlib import Path
@@ -96,8 +96,8 @@ workflow = Workflow(
     source=Path("/absolute/path/irc.log"),
     surfaces=(Surface(
         "transition-state",
-        Path("/absolute/path/ts-density.cube"),
-        Path("/absolute/path/ts-potential.cube"),
+        density=Path("/absolute/path/ts-density.cube"),
+        potential=Path("/absolute/path/ts-potential.cube"),
     ),),
     density_isovalue=0.002,
     surface_style=SurfaceStyle.TRANSPARENT,
