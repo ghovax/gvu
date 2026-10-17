@@ -234,9 +234,10 @@ class WorkflowTests(unittest.TestCase):
             except RuntimeError:
                 LOG.error("failed", exc_info=True)
         text = stream.getvalue()
-        self.assertIn("[INFO] sample time=", text)
+        self.assertRegex(text, r"(?m)^\d{4}-\d{2}-\d{2}T\S+ \[INFO\] sample logger=")
         self.assertIn("path=/example text='a\\nb'", text)
-        self.assertIn("[ERROR] failed time=", text)
+        self.assertRegex(text, r"(?m)^\d{4}-\d{2}-\d{2}T\S+ \[ERROR\] failed logger=")
+        self.assertNotIn(" time=", text)
         self.assertIn("Traceback (most recent call last):", text)
         self.assertIn("RuntimeError: multiline\nerror", text)
         self.assertNotIn("hidden", text)

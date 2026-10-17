@@ -50,4 +50,4 @@ Bonds displayed by GaussView can be inferred from geometry or read from connecti
 
 ## Logs
 
-GVU emits `[LEVEL] message key=value ...` records to stderr with UTC timestamps, logger, process ID and relevant metadata. Exceptions include ordinary Python tracebacks. Default output records essential opening, scale and failure events; `workflow.view(log_level="DEBUG")` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.
+GVU emits `TIMESTAMP [LEVEL] message key=value ...` records to stderr. The UTC timestamp precedes the level; logger, process ID and relevant metadata follow the message. Exceptions include ordinary Python tracebacks. Default output records essential opening, scale and failure events; `workflow.view(log_level="DEBUG")` adds diagnostics. It does not automatically create log or metadata sidecar files. Initial uv installation output is separate from the library's event stream.

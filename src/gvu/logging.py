@@ -11,11 +11,11 @@ LOG = logging.getLogger("gvu")
 
 class TextFormatter(logging.Formatter):
     def __init__(self):
-        super().__init__("[%(levelname)s] %(message)s %(metadata_text)s")
+        super().__init__("%(timestamp)s [%(levelname)s] %(message)s %(metadata_text)s")
 
     def format(self, record):
+        record.timestamp = datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds")
         fields = {
-            "time": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
             "logger": record.name,
             "pid": record.process,
         }
