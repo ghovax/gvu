@@ -76,6 +76,14 @@ Many GaussView Qt widgets appear only as an `AXUnknown` region. Use the rendered
 
 An OCR label does not establish a widget's type, enabled state or current value. Duplicate labels are rejected rather than resolved arbitrarily.
 
+## Automatic interaction
+
+- Menu discovery cancels the open native menu once and waits for tracking to end.
+- Menu commands check availability before invocation; disabled actions raise `ActionUnavailable`.
+- Animation settings close with a click outside the options panel.
+- Opacity uses [Qt's absolute slider positioning](https://github.com/qt/qt/blob/4.8/src/gui/widgets/qslider.cpp) with the middle mouse button. It does not send Home or End keys.
+- These operations leave macOS volume and alert-sound preferences unchanged. Explicit calls to `dialog.key(...)` still send the requested key to the application.
+
 ## Settings
 
 ```python

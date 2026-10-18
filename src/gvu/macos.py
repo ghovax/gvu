@@ -83,13 +83,16 @@ class MacViewer:
         ]
 
     def molecule_groups(self):
-        self.apple('click menu bar item "Windows" of menu bar 1\nkey code 53')
-        names = self.apple(
-            'get name of every menu item of menu "Show Molecule Groups" '
-            'of menu item "Show Molecule Groups" of menu "Windows" '
-            'of menu bar item "Windows" of menu bar 1'
-        )
-        return {name + ":" for name in re.findall(r"\bG\d+\b", names)}
+        from .menus import native_nodes
+
+        self.front()
+        return {
+            item.path[2] + ":"
+            for item, _ in native_nodes(self, "Windows")
+            if len(item.path) == 3
+            and item.path[:2] == ("Windows", "Show Molecule Groups")
+            and re.fullmatch(r"G\d+", item.path[2])
+        }
 
     def check_errors(self):
         for window in self.windows():
@@ -273,28 +276,44 @@ class MacViewer:
         wait_for(lambda: self.find("Select Jobs from File") is None, "selected jobs to load")
         return True
 
-    def click(self, x, y):
+    def click(self, x, y, button="left"):
+        buttons = {
+            "left": (
+                self.Q.kCGMouseButtonLeft,
+                self.Q.kCGEventLeftMouseDown,
+                self.Q.kCGEventLeftMouseUp,
+            ),
+            "middle": (
+                self.Q.kCGMouseButtonCenter,
+                self.Q.kCGEventOtherMouseDown,
+                self.Q.kCGEventOtherMouseUp,
+            ),
+            "right": (
+                self.Q.kCGMouseButtonRight,
+                self.Q.kCGEventRightMouseDown,
+                self.Q.kCGEventRightMouseUp,
+            ),
+        }
+        if button not in buttons:
+            raise ValueError("Choose left, middle or right mouse button")
+        native_button, down, up = buttons[button]
         self.front()
         self.Q.CGEventPost(
             self.Q.kCGHIDEventTap,
-            self.Q.CGEventCreateMouseEvent(
-                None, self.Q.kCGEventMouseMoved, (x, y), self.Q.kCGMouseButtonLeft
-            ),
+            self.Q.CGEventCreateMouseEvent(None, self.Q.kCGEventMouseMoved, (x, y), native_button),
         )
         time.sleep(0.1)
-        for kind in (self.Q.kCGEventLeftMouseDown, self.Q.kCGEventLeftMouseUp):
-            event = self.Q.CGEventCreateMouseEvent(
-                None, kind, (x, y), self.Q.kCGMouseButtonLeft
-            )
+        for kind in (down, up):
+            event = self.Q.CGEventCreateMouseEvent(None, kind, (x, y), native_button)
             self.Q.CGEventPost(self.Q.kCGHIDEventTap, event)
             time.sleep(0.06)
         time.sleep(0.35)
 
     def menu(self, menu, item):
-        self.apple(
-            f"click menu item {json.dumps(item)} of menu {json.dumps(menu)} "
-            f"of menu bar item {json.dumps(menu)} of menu bar 1"
-        )
+        from .menus import invoke_native
+
+        self.front()
+        invoke_native(self, (menu, item))
         time.sleep(0.25)
 
     def front(self, force=False):
@@ -637,9 +656,7 @@ class MacViewer:
         wait_for(lambda: self.label(dialog, "Format:"), "surface format")
         bounds = dialog["kCGWindowBounds"]
         popup = self.open_popup(bounds["X"] + 157, bounds["Y"] + 96, 47)
-        choice = wait_for(
-            lambda: self.label(popup, style.value), f"{style.value} option"
-        )
+        choice = wait_for(lambda: self.label(popup, style.value), f"{style.value} option")
         self.click(choice[1], choice[2])
         if any(
             not w.get("kCGWindowName") and w["kCGWindowBounds"]["Height"] == 47
@@ -647,35 +664,14 @@ class MacViewer:
         ):
             self.click(choice[1], choice[2])
         if style is SurfaceStyle.TRANSPARENT:
-            wait_for(
-                lambda: self.label(dialog, "Transparent Options"), "transparent surface"
-            )
-        if style is SurfaceStyle.TRANSPARENT:
-            # The opacity slider's existing requested opacity is the GaussView default.
-            # Set it explicitly with a drag, rather than a page-step click.
+            wait_for(lambda: self.label(dialog, "Transparent Options"), "transparent surface")
             left, right = bounds["X"] + 153, bounds["X"] + 373
-            middle, slider_y = left + (right - left) * opacity, bounds["Y"] + 154
-            self.click(middle, slider_y)
-            self.apple("key code 115")  # Home: slider minimum
-            self.apple("key code 119")  # End: slider maximum
-            # Drag from the maximum to the requested opacity (same explicit opacity across views).
-            for kind, point in (
-                (self.Q.kCGEventMouseMoved, (right, slider_y)),
-                (self.Q.kCGEventLeftMouseDown, (right, slider_y)),
-                (self.Q.kCGEventLeftMouseDragged, (middle, slider_y)),
-                (self.Q.kCGEventLeftMouseUp, (middle, slider_y)),
-            ):
-                self.Q.CGEventPost(
-                    self.Q.kCGHIDEventTap,
-                    self.Q.CGEventCreateMouseEvent(
-                        None, kind, point, self.Q.kCGMouseButtonLeft
-                    ),
-                )
-                time.sleep(0.1)
+            target, slider_y = left + (right - left) * opacity, bounds["Y"] + 154
+            # Qt's native macOS and common slider styles use the middle button
+            # for absolute positioning, without relying on keyboard focus.
+            self.click(target, slider_y, button="middle")
         self.click(bounds["X"] + 162, bounds["Y"] + 446)  # OK
-        wait_for(
-            lambda: self.find("Display Format") is None, "display settings to apply"
-        )
+        wait_for(lambda: self.find("Display Format") is None, "display settings to apply")
         if self.color_range is not None:
             self.apply_scale(group)
 

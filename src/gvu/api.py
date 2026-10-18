@@ -844,17 +844,13 @@ class ModelView:
             raise ActionUnavailable("Cannot determine molecule-group playback state")
         return red > green
 
-    def animation(
-        self, repeats=None, sequence=None, frame_delay=None, endpoint_delay=None
-    ):
+    def animation(self, repeats=None, sequence=None, frame_delay=None, endpoint_delay=None):
         """Configure the native molecule-group playback controls."""
         from .macos import wait_for
 
         for value in (frame_delay, endpoint_delay):
             if value is not None and (not isinstance(value, int) or value < 0):
-                raise ValueError(
-                    "Animation delays must be nonnegative integer milliseconds"
-                )
+                raise ValueError("Animation delays must be nonnegative integer milliseconds")
         self.activate()
         backend = self.session.backend
         b = self.window["kCGWindowBounds"]
@@ -889,15 +885,13 @@ class ModelView:
                     + json.dumps(str(value))
                     + "\nkey code 48"
                 )
-        backend.apple("key code 53")
-        # Escape may close a combo list first; an outside title-bar click closes
-        # the containing Qt options popup before the playback button is used.
+        # Commit edited fields and dismiss the options popup with an outside
+        # click. Escape can reach the model instead if the popup closed early.
         backend.click(b["X"] + 200, b["Y"] + 14)
         wait_for(
             lambda: (
                 not any(
-                    w["kCGWindowNumber"] == window["kCGWindowNumber"]
-                    for w in backend.windows()
+                    w["kCGWindowNumber"] == window["kCGWindowNumber"] for w in backend.windows()
                 )
             ),
             "animation options to close",

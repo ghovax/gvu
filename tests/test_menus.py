@@ -31,6 +31,50 @@ def reader():
 
 
 class MenuTests(unittest.TestCase):
+    def test_menu_cancel(self):
+        """Cancel the tracked menu once without addressing its closed parent."""
+        from gvu.menus import _cancel_menu
+
+        child = node("", role="AXMenu")
+        parent = node("File", [child], AXSelected=True)
+
+        def perform(element, action):
+            parent["AXSelected"] = False
+            return 0
+
+        action = Mock(side_effect=perform)
+        _cancel_menu(
+            parent,
+            lambda e, n, default=None: e.get(n, default),
+            lambda e: e.get("AXChildren", ()),
+            action,
+        )
+        action.assert_called_once_with(child, "AXCancel")
+        action.reset_mock()
+        _cancel_menu(
+            parent,
+            lambda e, n, default=None: e.get(n, default),
+            lambda e: e.get("AXChildren", ()),
+            action,
+        )
+        action.assert_not_called()
+
+    def test_cancel_error(self):
+        """Report a failed native cancellation without falling back to keys."""
+        from gvu.menus import _cancel_menu
+
+        child = node("", role="AXMenu")
+        parent = node("File", [child], AXSelected=True)
+        action = Mock(return_value=-25202)
+        with self.assertRaisesRegex(ActionUnavailable, "Cannot close native menu"):
+            _cancel_menu(
+                parent,
+                lambda e, n, default=None: e.get(n, default),
+                lambda e: e.get("AXChildren", ()),
+                action,
+            )
+        action.assert_called_once_with(child, "AXCancel")
+
     def test_all_roots(self):
         """Include every app menu and normalize Help's native trailing space."""
         names = (

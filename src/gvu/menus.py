@@ -154,6 +154,25 @@ class MenuReader:
         return nodes
 
 
+def _cancel_menu(element, attribute, children, perform):
+    """Cancel a tracked menu once, without sending keys to the next window."""
+    if not attribute(element, "AXSelected", False):
+        return
+    from .macos import wait_for
+
+    menus = [c for c in children(element) if attribute(c, "AXRole", "") == "AXMenu"]
+    if len(menus) != 1:
+        raise ActionUnavailable("Cannot identify the open native menu")
+    error = perform(menus[0], "AXCancel")
+    if error:
+        raise ActionUnavailable(f"Cannot close native menu ({error})")
+    wait_for(
+        lambda: not attribute(element, "AXSelected", False),
+        "menu to close",
+        timeout=3,
+    )
+
+
 def native_nodes(backend, root=None):
     from ApplicationServices import (
         AXUIElementCopyAttributeValue,
@@ -171,40 +190,24 @@ def native_nodes(backend, root=None):
     def refresh(element):
         from .macos import wait_for
 
-        # macOS menu tracking can ignore Escape sent through System Events.
-        # Cancel the native AXMenu itself and verify that tracking has ended.
         error = AXUIElementPerformAction(element, "AXPress")
         if error:
             raise ActionUnavailable(
                 f"Cannot refresh menu {attribute(element, 'AXTitle', '')!r} ({error})"
             )
-        wait_for(
-            lambda: (
-                attribute(element, "AXSelected", False)
-                and any(w.get("kCGWindowLayer") == 101 for w in backend.windows())
-            ),
-            "native menu to become visible",
-            timeout=3,
-        )
-        menus = [c for c in children(element) if attribute(c, "AXRole", "") == "AXMenu"]
-        if len(menus) != 1:
-            raise ActionUnavailable("Cannot identify the open native menu")
-        error = AXUIElementPerformAction(element, "AXCancel")
-        AXUIElementPerformAction(menus[0], "AXCancel")
-        if error:
-            raise ActionUnavailable(f"Cannot close native menu ({error})")
-        wait_for(
-            lambda: not attribute(element, "AXSelected", False),
-            "menu to close",
-            timeout=3,
-        )
+        try:
+            wait_for(
+                lambda: attribute(element, "AXSelected", False),
+                "native menu to become visible",
+                timeout=3,
+            )
+        finally:
+            _cancel_menu(element, attribute, children, AXUIElementPerformAction)
 
     app = AXUIElementCreateApplication(backend.pid)
     bar = attribute(app, "AXMenuBar")
     if bar is None:
-        raise ActionUnavailable(
-            "Cannot read the app menu bar; check Accessibility permissions"
-        )
+        raise ActionUnavailable("Cannot read the app menu bar; check Accessibility permissions")
     return MenuReader(attribute, children, refresh).nodes(children(bar), root)
 
 
@@ -215,11 +218,22 @@ def invoke_native(backend, path):
     nodes = native_nodes(backend, path[0])
     matches = [(item, node) for item, node in nodes if item.path == path]
     if len(matches) != 1 or not matches[0][0].enabled or matches[0][0].submenu:
-        raise ActionUnavailable(
-            "Unavailable or ambiguous menu action: " + " > ".join(path)
-        )
+        raise ActionUnavailable("Unavailable or ambiguous menu action: " + " > ".join(path))
+    # Invocation normally ends menu tracking itself. Only cancel a menu that
+    # remains selected, rather than sending a second action into a new dialog.
+    from ApplicationServices import AXUIElementCopyAttributeValue
+
+    def attribute(element, name, default=None):
+        error, value = AXUIElementCopyAttributeValue(element, name, None)
+        return default if error or value is None else value
+
     error = AXUIElementPerformAction(matches[0][1], "AXPress")
     root_node = next(node for item, node in nodes if item.path == path[:1])
-    AXUIElementPerformAction(root_node, "AXCancel")
+    _cancel_menu(
+        root_node,
+        attribute,
+        lambda element: attribute(element, "AXChildren", ()),
+        AXUIElementPerformAction,
+    )
     if error:
         raise ActionUnavailable(f"Cannot invoke {path!r} ({error})")

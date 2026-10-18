@@ -17,6 +17,7 @@ Live checks covered:
 - All ten application menu roots, Help-name normalization and disabled-parent state.
 - Settings discovery/opening and a labels toggle restored to its original state.
 - Preference category discovery, native-control inspection and closure.
+- Single-action native menu cancellation, verified through accessibility selection state.
 
 ## Incomplete or unverified operations
 
@@ -24,6 +25,7 @@ Live checks covered:
 | --- | --- |
 | Preferences | Categories are indexed; rendered page navigation failed content-change verification. Individual fields and applying changed values remain unverified. |
 | Specialist result dialogs | Entries are indexed and availability is checked; every internal control has not been tested. |
+| Quiet interaction | Unit tests cover key-free group discovery, animation dismissal and absolute opacity positioning. Native single-action menu cancellation passed a live check; the opacity and animation changes still require a live visual/audio check because the latest capture attempt failed. |
 | Movie export | Native helpers exist; end-to-end export remains unverified in this revision. |
 | Context menus | Dedicated plot helpers exist; the menu-bar catalog does not enumerate every arbitrary right-click tree. |
 | Other installations | Other GaussView versions, themes, display scales, languages and operating systems require validation. |

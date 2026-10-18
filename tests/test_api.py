@@ -16,6 +16,107 @@ from gvu.viewer import validate
 
 
 class ApiTests(unittest.TestCase):
+    def test_group_discovery(self):
+        """Read group identifiers from the native menu without Escape."""
+        from unittest.mock import Mock, patch
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        backend.front = Mock()
+        backend.apple = Mock()
+        items = [
+            (MenuItem(("Windows", "Show Molecule Groups", "G2"), True), None),
+            (MenuItem(("Windows", "Show Molecule Groups", "G12"), True), None),
+            (MenuItem(("Windows", "Other"), True), None),
+        ]
+        with patch("gvu.menus.native_nodes", return_value=items):
+            self.assertEqual(backend.molecule_groups(), {"G2:", "G12:"})
+        backend.apple.assert_not_called()
+
+    def test_animation_dismiss(self):
+        """Dismiss animation options with a pointer action instead of Escape."""
+        from unittest.mock import Mock
+
+        view = {"kCGWindowBounds": {"X": 100, "Y": 50}}
+        popup = {"kCGWindowBounds": {}, "kCGWindowNumber": 42}
+        state = {"open": True}
+
+        def click(x, y):
+            if (x, y) == (300, 64):
+                state["open"] = False
+
+        backend = SimpleNamespace(
+            group_view=lambda group: view,
+            windows=lambda: [popup] if state["open"] else [],
+            label=lambda window, text: (text, 0, 0),
+            click=Mock(side_effect=click),
+            apple=Mock(),
+        )
+        model = ModelView(Session(backend), "G1:")
+        model.activate = Mock()
+        model.animation()
+        backend.apple.assert_not_called()
+        backend.click.assert_any_call(300, 64)
+
+    def test_opacity_pointer(self):
+        """Position opacity absolutely without Home or End key events."""
+        from unittest.mock import Mock
+
+        from gvu import SurfaceStyle
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        dialog = {"kCGWindowBounds": {"X": 100, "Y": 50}}
+        backend.group_view = lambda group: {}
+        backend.activate = Mock()
+        backend.menu = Mock()
+        backend.window = lambda title: dialog
+        backend.label = lambda window, text: (text, 0, 0)
+        backend.open_popup = lambda *args: {}
+        backend.windows = lambda: []
+        backend.find = lambda title: None
+        backend.color_range = None
+        backend.click = Mock()
+        backend.apple = Mock()
+        backend.surface_format("G1:", SurfaceStyle.TRANSPARENT, 0.25)
+        backend.click.assert_any_call(308.0, 204, button="middle")
+        backend.apple.assert_not_called()
+
+    def test_middle_click(self):
+        """Send paired pointer events with the requested native mouse button."""
+        from unittest.mock import Mock, patch
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        backend.front = Mock()
+        names = (
+            "kCGMouseButtonLeft",
+            "kCGMouseButtonCenter",
+            "kCGMouseButtonRight",
+            "kCGEventLeftMouseDown",
+            "kCGEventLeftMouseUp",
+            "kCGEventOtherMouseDown",
+            "kCGEventOtherMouseUp",
+            "kCGEventRightMouseDown",
+            "kCGEventRightMouseUp",
+            "kCGEventMouseMoved",
+            "kCGHIDEventTap",
+        )
+        constants = {name: name for name in names}
+        backend.Q = SimpleNamespace(
+            **constants, CGEventPost=Mock(), CGEventCreateMouseEvent=Mock(side_effect=lambda *a: a)
+        )
+        with patch("gvu.macos.time.sleep"):
+            backend.click(10, 20, button="middle")
+        events = backend.Q.CGEventCreateMouseEvent.call_args_list
+        self.assertEqual(
+            [e.args[1] for e in events],
+            ["kCGEventMouseMoved", "kCGEventOtherMouseDown", "kCGEventOtherMouseUp"],
+        )
+        self.assertTrue(all(e.args[3] == "kCGMouseButtonCenter" for e in events))
+
     def test_disabled_action(self):
         """Refuse a disabled menu action before sending an accessibility event."""
         backend = SimpleNamespace(front=lambda: None)
