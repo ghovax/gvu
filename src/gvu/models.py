@@ -191,11 +191,13 @@ class Workflow:
 
         Args:
             application_path: Application bundle; defaults to ~/Applications/GaussView6/gview.app.
-            reuse_views: Reuse matching open views; False opens new views.
+            reuse_views: Reuse loaded data and restore missing panels; False reloads files.
             log_level: Standard logging level, such as "INFO", "DEBUG" or logging.DEBUG.
 
         Validates the workflow before opening windows. Failures raise their original
-        exceptions for the caller to handle. Process arguments are never inspected.
+        exceptions for the caller to handle. Reuse preserves already loaded data;
+        use reuse_views=False after changing source or cube files.
+        Process arguments are never inspected.
         """
         from .viewer import open_workflow
 

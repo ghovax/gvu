@@ -32,7 +32,8 @@ workflow.view(application_path=Path("/path/to/gview.app"))
 
 - `validate()` checks required files and applicable result markers without opening GaussView.
 - `view()` validates before opening and reuses matching views by default.
-- `reuse_views=False` requests new views; the default `True` reuses matching open views.
+- `reuse_views=False` reloads files into new views; use it after changing source or cube data.
+- The default `True` preserves matching loaded views and restores any missing result panels.
 - `log_level="DEBUG"` enables diagnostic logging; `"INFO"` is the default. Standard numeric logging levels are also accepted.
 - `application_path=Path(...)` selects an application bundle.
 

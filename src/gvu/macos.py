@@ -348,27 +348,34 @@ class MacViewer:
             time.sleep(0.25)
 
     def activate(self, window):
-        """Focus a model without moving it or any other window."""
-        self.front(force=True)
+        """Change groups only when needed, then raise the requested window."""
+        self.front()
+
+        def active_window():
+            """Read the current app window without opening a menu."""
+            return next(
+                (item for item in self.windows() if item.get("kCGWindowLayer", 0) == 0), {}
+            )
+
+        current = active_window()
+        if current.get("kCGWindowNumber") == window["kCGWindowNumber"]:
+            return
         title = window["kCGWindowName"]
         target = window_reference(title)
-        # The native Windows menu selects the model even when AXRaise alone
-        # raises its Qt shell without changing the active molecule group.
-        self.apple(
-            "set targetName to name of " + target + "\n"
-            'click menu bar item "Windows" of menu bar 1\n'
-            'click menu item targetName of menu "Windows" '
-            'of menu bar item "Windows" of menu bar 1\n'
-            'perform action "AXRaise" of ' + target
-        )
+        group = re.match(r"G\d+:", title)
+        active_group = re.match(r"G\d+:", current.get("kCGWindowName", ""))
+        if group and (not active_group or active_group[0] != group[0]):
+            model = self.group_view(group[0])
+            if model:
+                # Qt needs group selection when crossing between molecules;
+                # raising another window within the current group does not.
+                name = self.apple("get name of " + window_reference(model["kCGWindowName"])).strip()
+                self.menu("Windows", name)
+        if active_window().get("kCGWindowNumber") != window["kCGWindowNumber"]:
+            self.apple('perform action "AXRaise" of ' + target)
         wait_for(
-            lambda: (
-                next(
-                    (w for w in self.windows() if w.get("kCGWindowLayer", 0) == 0), {}
-                ).get("kCGWindowNumber")
-                == window["kCGWindowNumber"]
-            ),
-            "active molecule window",
+            lambda: active_window().get("kCGWindowNumber") == window["kCGWindowNumber"],
+            "active GaussView window",
         )
 
     def set_bounds(self, window, bounds):
@@ -799,19 +806,13 @@ class MacViewer:
         return None
 
     def open_result(self, group, result):
+        """Reuse an open result or dispatch through its refreshed native menu."""
+        if window := self.result_window(group, result):
+            return window
         self.activate(self.group_view(group))
-        enabled = self.apple(
-            "get enabled of menu item "
-            + json.dumps(result.value)
-            + ' of menu "Results" of menu bar item "Results" of menu bar 1'
-        ).strip()
-        if enabled != "true":
-            from .api import ActionUnavailable
-
-            raise ActionUnavailable(
-                f"{result.name} is unavailable for this molecule group"
-            )
         self.menu("Results", result.value)
         return wait_for(
-            lambda: self.result_window(group, result), f"{result.name} display"
+            lambda: self.result_window(group, result),
+            f"{result.name} display",
+            timeout=45,
         )

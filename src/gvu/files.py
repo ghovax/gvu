@@ -1,5 +1,6 @@
 """GaussView input formats and single-job comparison documents."""
 
+import re
 from pathlib import Path
 
 from .errors import UnsupportedFormat
@@ -46,10 +47,16 @@ def input_paths(paths):
     return paths
 
 
+
+def matches_document(window, path):
+    """Match a molecule view's complete source path, excluding prefix collisions."""
+    title = str(window.get("kCGWindowName", ""))
+    source = Path(path).expanduser().resolve()
+    return bool(re.match(r"G\d+:M\d+:V\d+", title)) and title.endswith(f" ({source})")
+
+
 def first_job(path):
     """Use the explicit first Gaussian input geometry, excluding later Link1 jobs."""
-    import re
-
     path = Path(path)
     if path.suffix.lower() not in {".gjf", ".com"}:
         raise UnsupportedFormat("Comparisons require Gaussian .gjf or .com inputs")

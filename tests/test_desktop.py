@@ -141,16 +141,20 @@ class DocumentTests(unittest.TestCase):
             open_documents=Mock(),
             check_errors=Mock(),
             select_file_jobs=Mock(return_value=False),
-            windows=lambda: [{"kCGWindowName": f"G2:M1:V1 - {path.resolve()}"}],
+            windows=Mock(),
             group_ids=set(),
         )
         with TemporaryDirectory() as directory:
             path = Path(directory) / "model.gjf"
             path.write_text("# PM6\n")
+            backend.windows.side_effect = [
+                [], [{"kCGWindowName": f"G2:M1:V1 - {path.name} ({path.resolve()})"}],
+            ]
             s = Session(backend)
             models = s.load([path])
             self.assertEqual([m.group for m in models], ["G2:"])
             self.assertEqual(s._owned_groups, ["G2:"])
+            backend.molecule_groups.assert_called_once_with()
             backend.open_documents.assert_called_once_with(
                 (path.resolve(),), False, Grouping.SEPARATE
             )

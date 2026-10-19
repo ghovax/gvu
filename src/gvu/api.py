@@ -78,7 +78,7 @@ class Session:
 
     def load(self, paths, grouping=Grouping.SEPARATE, read_intermediates=False):
         """Load documents and own exactly the new molecule groups they create."""
-        from .files import input_paths, job_count
+        from .files import input_paths, job_count, matches_document
         from .macos import wait_for
 
         paths = input_paths(paths)
@@ -86,6 +86,7 @@ class Session:
             raise TypeError("Supply a Grouping")
 
         def groups():
+            """Read current native molecule-group identifiers for ownership tracking."""
             return self.backend.molecule_groups()
 
         before = groups()
@@ -93,17 +94,24 @@ class Session:
             self.backend.open_documents(paths, read_intermediates, grouping)
 
             def loaded():
+                """Require every requested document and expected group before returning."""
                 if self.backend.select_file_jobs():
                     return False
                 self.backend.check_errors()
-                created = groups() - before
+                windows = self.backend.windows()
+                # Loading exposes document windows directly; do not refresh the
+                # Windows menu on every readiness poll.
+                created = {
+                    match[1] for window in windows
+                    if (match := re.match(r"(G\d+:)M\d+:V\d+", window.get("kCGWindowName", "")))
+                } - before
                 expected = sum(job_count(p) for p in paths) if grouping is Grouping.SEPARATE else 1
                 loaded_paths = {
                     p
                     for p in paths
                     if any(
-                        str(p) in w.get("kCGWindowName", "")
-                        for w in self.backend.windows()
+                        matches_document(w, p)
+                        for w in windows
                         if w.get("kCGWindowName", "").split(":")[0] + ":" in created
                     )
                 }
@@ -116,7 +124,14 @@ class Session:
 
             created = wait_for(loaded, "loaded molecule groups", timeout=45)
         except Exception:
-            self._claim(groups() - before)
+            try:
+                self._claim(groups() - before)
+            except Exception as inspection_error:
+                # A failed bookkeeping lookup must not replace the loading error.
+                LOG.debug(
+                    "Could not inspect groups after failed loading",
+                    extra={"metadata": {"reason": str(inspection_error)}},
+                )
             raise
         ordered = sorted(created, key=lambda g: int(g[1:-1]))
         self._claim(ordered)
@@ -360,6 +375,7 @@ class Session:
         self.close()
 
     def _popup(self, label):
+        """Select a rendered popup item and wait for its menu to close."""
         from .macos import wait_for
 
         def choose():
@@ -387,6 +403,39 @@ class Session:
                 )
             ),
             "popup selection to close",
+        )
+
+    def _combo(self, target, current, choices):
+        """Select a known Qt combo choice without overshooting its option list."""
+        from .macos import wait_for
+
+        if target not in choices or current not in choices:
+            raise ValueError(f"Choose one of {', '.join(choices)}")
+
+        def opened():
+            """Require the rendered dropdown before sending navigation keys."""
+            for window in self.backend.windows():
+                if window.get("kCGWindowName") or window.get("kCGWindowLayer") != 101:
+                    continue
+                labels = [item[0] for item in self.backend.read(window)]
+                if "Repeats:" in labels:
+                    continue
+                if sum(any(choice in text for text in labels) for choice in choices) >= 2:
+                    return window
+            return None
+
+        window = wait_for(opened, "animation choices")
+        # Use the documented order, since OCR can merge a checkmark with the
+        # selected menu row. Stop at the target, then confirm inside the menu.
+        distance = choices.index(target) - choices.index(current)
+        direction = 125 if distance > 0 else 126
+        self.backend.apple((f"key code {direction}\n" * abs(distance)) + "key code 36")
+        wait_for(
+            lambda: not any(
+                item["kCGWindowNumber"] == window["kCGWindowNumber"]
+                for item in self.backend.windows()
+            ),
+            "animation choice to close",
         )
 
     def _save(self, path, timeout=60):
@@ -848,6 +897,7 @@ class ModelView:
         """Configure the native molecule-group playback controls."""
         from .macos import wait_for
 
+        # Delay values use milliseconds, matching the native controls.
         for value in (frame_delay, endpoint_delay):
             if value is not None and (not isinstance(value, int) or value < 0):
                 raise ValueError("Animation delays must be nonnegative integer milliseconds")
@@ -868,11 +918,36 @@ class ModelView:
 
         window = wait_for(options, "animation options")
         bounds = window["kCGWindowBounds"]
-        for label, value in (("Repeats:", repeats), ("Sequence:", sequence)):
+        for label, value, choices in (
+            ("Repeats:", repeats, ("None", "One", "Two", "Three", "Six", "Ten", "Endless")),
+            ("Sequence:", sequence, (
+                "Forward", "Backward", "Forward Loop", "Backward Loop",
+                "Forward then Backward", "Backward then Forward",
+            )),
+        ):
             if value is not None:
                 control = backend.label(window, label)
+
+                def selected(control=control):
+                    """Read the combo value aligned with this option's label."""
+                    values = [
+                        item[0] for item in backend.read(window)
+                        if item[1] > bounds["X"] + 150 and abs(item[2] - control[2]) < 8
+                    ]
+                    return values[0] if len(values) == 1 else None
+
+                current = selected()
+                if current is None:
+                    raise ActionUnavailable(f"Cannot read animation option {label}")
+                if str(value) not in choices or current not in choices:
+                    raise ValueError(f"Choose one of {', '.join(choices)}")
                 backend.click(bounds["X"] + 215, control[2])
-                self.session._popup(str(value))
+                self.session._combo(str(value), current, choices)
+                wait_for(
+                    lambda selected=selected, value=value: (selected() or "").casefold()
+                    == str(value).casefold(),
+                    f"animation option {label}",
+                )
         for label, value in (
             ("Frame Delay (msec):", frame_delay),
             ("Endpoint Delay (msec):", endpoint_delay),
@@ -902,8 +977,8 @@ class ModelView:
                 "metadata": {
                     "repeats": repeats,
                     "sequence": sequence,
-                    "frame_delay_ms": frame_delay,
-                    "endpoint_delay_ms": endpoint_delay,
+                    "frame_delay": frame_delay,
+                    "endpoint_delay": endpoint_delay,
                 }
             },
         )

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from .errors import ActionUnavailable
-from .files import input_paths, job_count
+from .files import input_paths, job_count, matches_document
 from .logging import LOG, configure_logging
 from .models import Workflow
 from .surfaces import color_range
@@ -77,18 +77,63 @@ def reusable_groups(viewer):
     sources = {
         int(match.group(1))
         for window in windows
-        if str(workflow.source) in (title := window.get("kCGWindowName", ""))
-        and (match := re.match(r"G(\d+):M\d+:V\d+", title))
+        if matches_document(window, workflow.source)
+        and (match := re.match(r"G(\d+):M\d+:V\d+", window["kCGWindowName"]))
     }
-    for start in sorted(sources):
-        end = start
-        while end + 1 in sources:
-            end += 1
-        groups = [f"G{number}:" for number in range(start, end + 1)]
+    expected = job_count(workflow.source)
+    for start in sorted(sources, reverse=True):
+        # Keep one complete load, rather than merging adjoining duplicate loads.
+        groups = [f"G{number}:" for number in range(start, start + expected)]
+        if not all(number in sources for number in range(start, start + expected)):
+            continue
+        end = start + expected - 1
         surfaces = [f"G{end + offset}:" for offset in range(1, len(workflow.surfaces) + 1)]
-        if len(groups) >= job_count(workflow.source) and all(group in mapped_groups for group in surfaces):
+        if all(group in mapped_groups for group in surfaces):
             return [*groups, *surfaces]
     return None
+
+
+
+def _open_results(viewer, groups, results):
+    """Restore requested result panels without reopening their source molecules."""
+    for result in results:
+        displays = []
+        for group in groups:
+            try:
+                window = viewer.result_window(group, result) or viewer.open_result(group, result)
+            except ActionUnavailable:
+                continue
+            displays.append(window)
+            LOG.debug(
+                "result_opened",
+                extra={"metadata": {"result": result.name,
+                                    "window": window["kCGWindowName"], "group": group}},
+            )
+        if not displays:
+            raise ActionUnavailable(f"{result.name} is unavailable in all loaded jobs")
+
+
+def _reuse_workflow(viewer):
+    """Reuse a complete open group block and restore only its missing panels."""
+    workflow = viewer.workflow
+    groups = reusable_groups(viewer)
+    if not groups:
+        return None
+    surface_count = len(workflow.surfaces)
+    source_groups = groups[:-surface_count] if surface_count else groups
+    surface_groups = groups[-surface_count:] if surface_count else []
+    viewer.group_ids.update(groups)
+    for group in surface_groups:
+        try:
+            viewer.verify_scale(group)
+        except ActionUnavailable:
+            raise
+        except RuntimeError:
+            # Restore a mismatched legend in place instead of duplicating cubes.
+            viewer.apply_scale(group)
+    _open_results(viewer, source_groups, workflow.results)
+    viewer.front(force=True)
+    return groups
 
 
 def launch(workflow, app, reuse_views=True):
@@ -117,46 +162,10 @@ def launch(workflow, app, reuse_views=True):
     if len(pids) > 1:
         raise RuntimeError("Close duplicate GaussView app instances before running this launcher")
     if reuse_views and pids:
-        process_started = subprocess.run(
-            ["ps", "-p", str(pids[0]), "-o", "lstart="],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=5,
-        ).stdout.strip()
-        process_start = time.mktime(time.strptime(process_started, "%a %b %d %H:%M:%S %Y"))
-        if all(p.stat().st_mtime < process_start for p in workflow.files):
-            viewer = MacViewer(pids[0], workflow, app, bounds)
-            groups = reusable_groups(viewer)
-            source_groups = (
-                (groups[: -len(workflow.surfaces)] if workflow.surfaces else groups)
-                if groups
-                else []
-            )
-            if source_groups and all(
-                any(viewer.result_window(group, result) for group in source_groups)
-                for result in workflow.results
-            ):
-                viewer.group_ids.update(groups)
-                try:
-                    surface_groups = groups[-len(workflow.surfaces) :] if workflow.surfaces else []
-                    for group in surface_groups:
-                        viewer.verify_scale(group)
-                except RuntimeError as error:
-                    LOG.debug(
-                        "existing_views_incomplete",
-                        extra={"metadata": {"reason": str(error)}},
-                    )
-                else:
-                    for result in workflow.results:
-                        for group in source_groups:
-                            if not viewer.result_window(group, result):
-                                try:
-                                    viewer.open_result(group, result)
-                                except ActionUnavailable:
-                                    continue
-                    viewer.front(force=True)
-                    return viewer, groups, True
+        viewer = MacViewer(pids[0], workflow, app, bounds)
+        groups = _reuse_workflow(viewer)
+        if groups:
+            return viewer, groups, True
 
     # Start the normal app before configuring file-reading options.
     if not pids:
@@ -195,7 +204,7 @@ def launch(workflow, app, reuse_views=True):
                 w
                 for w in viewer.windows()
                 if w["kCGWindowNumber"] not in previous_windows
-                and str(path) in w.get("kCGWindowName", "")
+                and matches_document(w, path)
             ),
             None,
         )
@@ -235,7 +244,7 @@ def launch(workflow, app, reuse_views=True):
             w["kCGWindowName"].split(":")[0]
             for w in viewer.windows()
             if w["kCGWindowNumber"] not in previous_windows
-            and str(workflow.source) in w.get("kCGWindowName", "")
+            and matches_document(w, workflow.source)
         }
         return len(source_groups) >= expected_source_jobs and all(
             opened(p) for p in [workflow.source, *density_files]
@@ -247,7 +256,7 @@ def launch(workflow, app, reuse_views=True):
             w["kCGWindowName"].split(":")[0] + ":"
             for w in viewer.windows()
             if w["kCGWindowNumber"] not in previous_windows
-            and str(workflow.source) in w.get("kCGWindowName", "")
+            and matches_document(w, workflow.source)
         )
     )
     source_groups.sort(key=lambda group: int(group[1:-1]))
@@ -268,26 +277,7 @@ def launch(workflow, app, reuse_views=True):
         )
     for group in source_groups:
         viewer.orient(group)
-    for result in workflow.results:
-        displays = []
-        for group in source_groups:
-            try:
-                window = viewer.open_result(group, result)
-            except ActionUnavailable:
-                continue
-            displays.append(window)
-            LOG.debug(
-                "result_opened",
-                extra={
-                    "metadata": {
-                        "result": result.name,
-                        "window": window["kCGWindowName"],
-                        "group": group,
-                    }
-                },
-            )
-        if not displays:
-            raise ActionUnavailable(f"{result.name} is unavailable in all loaded jobs")
+    _open_results(viewer, source_groups, workflow.results)
     if workflow.layout:
         viewer.arrange(groups)
     return viewer, groups, False

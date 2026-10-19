@@ -190,11 +190,12 @@ def native_nodes(backend, root=None):
     def refresh(element):
         from .macos import wait_for
 
-        error = AXUIElementPerformAction(element, "AXPress")
-        if error:
-            raise ActionUnavailable(
-                f"Cannot refresh menu {attribute(element, 'AXTitle', '')!r} ({error})"
-            )
+        if not attribute(element, "AXSelected", False):
+            error = AXUIElementPerformAction(element, "AXPress")
+            if error:
+                raise ActionUnavailable(
+                    f"Cannot refresh menu {attribute(element, 'AXTitle', '')!r} ({error})"
+                )
         try:
             wait_for(
                 lambda: attribute(element, "AXSelected", False),

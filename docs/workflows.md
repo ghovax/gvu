@@ -4,6 +4,8 @@
 
 `Session.open(workflow)` validates a workflow, starts or attaches to GaussView and opens its declared views. `Session.attach()` requires one running app and attaches without claiming existing groups. Both methods accept `application_path=Path(...)`; `Session.open(..., reuse_views=False)` requests new views. Group identifiers such as `"G1:"` belong to the current application session; discover them at runtime rather than treating them as permanent file identifiers.
 
+Reuse preserves the data already loaded in GaussView and restores missing result panels. After changing source or cube files, use `reuse_views=False` to load the new data.
+
 ```python
 from gvu import Session
 

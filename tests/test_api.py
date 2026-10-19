@@ -202,6 +202,30 @@ class ApiTests(unittest.TestCase):
         Session(backend)._popup("Endless")
         backend.click.assert_called_once_with(30, 40)
 
+    def test_combo_navigation(self):
+        """Move only between known choices and confirm inside the open menu."""
+        from unittest.mock import Mock
+
+        popup = {"kCGWindowName": "", "kCGWindowNumber": 42, "kCGWindowLayer": 101}
+        labels = [("None", 10, 10), ("One", 10, 25), ("v Endless", 10, 40)]
+        state = {"open": True}
+        backend = SimpleNamespace(
+            windows=lambda: [popup] if state["open"] else [],
+            read=lambda window: labels,
+            click=Mock(),
+            apple=Mock(side_effect=lambda command: state.update(open=False)),
+        )
+        session = Session(backend)
+        for current, target, command in (
+            ("None", "Endless", "key code 125\nkey code 125\nkey code 36"),
+            ("Endless", "One", "key code 126\nkey code 36"),
+            ("One", "One", "key code 36"),
+        ):
+            state["open"] = True
+            session._combo(target, current, ("None", "One", "Endless"))
+            self.assertEqual(backend.apple.call_args.args[0], command)
+        backend.click.assert_not_called()
+
     def test_popup_close(self):
         """Wait for a closing popup instead of clicking the exposed canvas twice."""
         from unittest.mock import Mock
@@ -307,6 +331,131 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(backend.click.call_args_list, [((100, 130),), ((400, 400),)])
         backend.find = lambda title: None
         self.assertFalse(backend.select_file_jobs())
+
+    def test_plot_activation(self):
+        """Select the owning model before raising a plot absent from Windows."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        source = {"kCGWindowName": "G2:M1:V1 - source.log (/tmp/source.log)", "kCGWindowNumber": 1}
+        plot = {"kCGWindowName": "G2:M1:V1 - IRC Plot", "kCGWindowNumber": 2}
+        state = {"front": {"kCGWindowName": "G1:M1:V1 - other.log", "kCGWindowNumber": 99}}
+        backend.front = Mock()
+        backend.group_view = lambda group: source
+        backend.windows = lambda: [state["front"]]
+        backend.menu = Mock(side_effect=lambda *args: state.update(front=source))
+
+        def apple(command):
+            if command.startswith("get name"):
+                return source["kCGWindowName"]
+            state["front"] = plot if "IRC Plot" in command else source
+            return ""
+
+        backend.apple = Mock(side_effect=apple)
+        backend.activate(plot)
+        backend.menu.assert_called_once_with("Windows", source["kCGWindowName"])
+        self.assertIs(state["front"], plot)
+
+    def test_repeat_activation(self):
+        """Reactivating the current model must not dispatch menus or raise it."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        source = {"kCGWindowName": "G2:M1:V1 - source.log", "kCGWindowNumber": 1}
+        backend.front = Mock()
+        backend.windows = lambda: [source]
+        backend.menu = Mock()
+        backend.apple = Mock()
+        backend.activate(source)
+        backend.activate(source)
+        backend.menu.assert_not_called()
+        backend.apple.assert_not_called()
+        backend.front.assert_called_with()
+
+    def test_group_activation(self):
+        """Raise another window in the same group without selecting Windows."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        source = {"kCGWindowName": "G2:M1:V1 - source.log", "kCGWindowNumber": 1}
+        plot = {"kCGWindowName": "G2:M1:V1 - IRC Plot", "kCGWindowNumber": 2}
+        state = {"front": source}
+        backend.front = Mock()
+        backend.windows = lambda: [state["front"]]
+        backend.menu = Mock()
+        backend.apple = Mock(side_effect=lambda command: state.update(front=plot))
+        backend.activate(plot)
+        backend.menu.assert_not_called()
+        backend.apple.assert_called_once()
+        self.assertIs(state["front"], plot)
+
+    def test_dialog_activation(self):
+        """Raise an application dialog without searching the molecule menu."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        dialog = {"kCGWindowName": "Preferences", "kCGWindowNumber": 3}
+        backend.front = Mock()
+        backend.windows = lambda: [dialog]
+        backend.menu = Mock()
+        backend.apple = Mock()
+        backend.activate(dialog)
+        backend.menu.assert_not_called()
+        backend.apple.assert_not_called()
+
+    def test_existing_result(self):
+        """Do not dispatch another command for a result panel already open."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        window = {"kCGWindowName": "G2:M1:V1 - Vibrations"}
+        backend.result_window = lambda group, result: window
+        backend.activate = Mock()
+        backend.menu = Mock()
+        self.assertIs(backend.open_result("G2:", Result.VIBRATIONS), window)
+        backend.activate.assert_not_called()
+        backend.menu.assert_not_called()
+
+    def test_loading_error(self):
+        """Keep the loading failure when ownership inspection also fails."""
+        from unittest.mock import Mock
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "model.gjf"
+            source.write_text("synthetic input")
+            backend = SimpleNamespace(
+                molecule_groups=Mock(side_effect=[set(), RuntimeError("Menu unavailable")]),
+                open_documents=Mock(side_effect=ValueError("Original loading failure")),
+            )
+            with self.assertRaisesRegex(ValueError, "Original loading failure"):
+                Session(backend).load(source)
+
+    def test_result_dispatch(self):
+        """Use refreshed menu dispatch instead of a stale AppleScript lookup."""
+        from unittest.mock import Mock
+
+        from gvu.macos import MacViewer
+
+        backend = MacViewer.__new__(MacViewer)
+        window = {"kCGWindowName": "G2:M1:V1 - Vibrations"}
+        backend.group_view = lambda group: window
+        backend.activate = Mock()
+        backend.menu = Mock()
+        backend.apple = Mock(side_effect=RuntimeError("Stale menu lookup"))
+        backend.result_window = lambda group, result: window if backend.menu.called else None
+        self.assertIs(backend.open_result("G2:", Result.VIBRATIONS), window)
+        backend.menu.assert_called_once_with("Results", "Vibrations...")
+        backend.apple.assert_not_called()
 
     def test_result_window(self):
         """Do not confuse a scan log's filename with its native scan plot."""

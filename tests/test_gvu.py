@@ -184,6 +184,88 @@ class WorkflowTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "VIBRATIONS data not found"):
                 validate(Workflow(source, (Result.VIBRATIONS,)))
 
+    def test_exact_source(self):
+        """Do not confuse another filename with a matching source-path prefix."""
+        from gvu.files import matches_document
+
+        path = Path("/runs/source.log")
+        self.assertTrue(matches_document({"kCGWindowName": f"G1:M2:V1 - source ({path})"}, path))
+        self.assertFalse(matches_document({"kCGWindowName": f"G1:M2:V1 - source ({path}.old)"}, path))
+        self.assertFalse(matches_document({"kCGWindowName": f"G1:M2:V1 - source ({path}) extra"}, path))
+
+    def test_duplicate_reuse(self):
+        """Reuse one complete load rather than combining duplicate source groups."""
+        from unittest.mock import patch
+
+        source = Path("/runs/source.log")
+        windows = [{"kCGWindowName": f"G{n}:M1:V1 - source ({source})"} for n in (2, 3, 4, 5)]
+        viewer = SimpleNamespace(workflow=Workflow(source), windows=lambda: windows)
+        with patch("gvu.viewer.job_count", return_value=1):
+            self.assertEqual(reusable_groups(viewer), ["G5:"])
+        with patch("gvu.viewer.job_count", return_value=2):
+            self.assertEqual(reusable_groups(viewer), ["G4:", "G5:"])
+
+    def test_restore_panel(self):
+        """Restore a closed panel on its existing source molecule group."""
+        from unittest.mock import Mock
+
+        from gvu.viewer import _reuse_workflow
+
+        source = Path("/runs/source.gjf")
+        panel = {"kCGWindowName": "G2:M1:V1 - Vibrations"}
+        viewer = SimpleNamespace(
+            workflow=Workflow(source, (Result.VIBRATIONS,)), group_ids=set(),
+            windows=lambda: [{"kCGWindowName": f"G2:M1:V1 - source ({source})"}],
+            result_window=lambda group, result: None,
+            open_result=Mock(return_value=panel), front=Mock(),
+        )
+        self.assertEqual(_reuse_workflow(viewer), ["G2:"])
+        viewer.open_result.assert_called_once_with("G2:", Result.VIBRATIONS)
+
+    def test_recent_reuse(self):
+        """Reuse loaded files without incorrectly comparing them to app startup."""
+        import sys
+        from unittest.mock import Mock, patch
+
+        from gvu.viewer import launch
+
+        backend = SimpleNamespace()
+        quartz = SimpleNamespace(CGPreflightScreenCaptureAccess=lambda: True)
+        native = SimpleNamespace(AXIsProcessTrusted=lambda: True,
+                                 AXUIElementCopyAttributeValue=Mock(),
+                                 AXUIElementCreateApplication=Mock())
+        with (
+            patch.dict(sys.modules, {"Quartz": quartz, "ApplicationServices": native}),
+            patch("gvu.viewer.application_pids", return_value=[123]),
+            patch("gvu.macos.MacViewer", return_value=backend),
+            patch("gvu.viewer._reuse_workflow", return_value=["G2:"]),
+            patch("gvu.viewer.subprocess.run", side_effect=AssertionError("App-age lookup")),
+        ):
+            self.assertEqual(launch(Workflow(Path("/recent.gjf")), Path("/gview.app")),
+                             (backend, ["G2:"], True))
+
+    def test_reuse_legend(self):
+        """Only edit a reused ESP legend when its requested bounds differ."""
+        from unittest.mock import Mock
+
+        from gvu.viewer import _reuse_workflow
+
+        source = Path("/runs/source.gjf")
+        surface = Surface("state", density=Path("/density.cube"), potential=Path("/potential.cube"))
+        viewer = SimpleNamespace(
+            workflow=Workflow(source, surfaces=(surface,)), group_ids=set(),
+            windows=lambda: [
+                {"kCGWindowName": f"G2:M1:V1 - source ({source})"},
+                {"kCGWindowName": "G3:M1:V1 - Density ( isoval = 0.002 ; [mapped with ESP] )"},
+            ],
+            verify_scale=Mock(), apply_scale=Mock(), front=Mock(),
+        )
+        self.assertEqual(_reuse_workflow(viewer), ["G2:", "G3:"])
+        viewer.apply_scale.assert_not_called()
+        viewer.verify_scale.side_effect = RuntimeError("Legend differs")
+        self.assertEqual(_reuse_workflow(viewer), ["G2:", "G3:"])
+        viewer.apply_scale.assert_called_once_with("G3:")
+
     def test_group_reuse(self):
         """Recognize a complete mapped group block without source filenames."""
         source = Path("/runs/irc.log")

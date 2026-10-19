@@ -31,6 +31,36 @@ def reader():
 
 
 class MenuTests(unittest.TestCase):
+    def test_open_refresh(self):
+        """Inspect an already open menu without toggling it closed first."""
+        import sys
+        from unittest.mock import patch
+
+        from gvu.menus import native_nodes
+
+        root = menu("File", node("Open..."), AXSelected=True)
+        bar = node("", [root], "AXMenuBar")
+        app = {"AXMenuBar": bar}
+
+        def perform(element, action):
+            if element is root:
+                root["AXSelected"] = not root["AXSelected"]
+            else:
+                root["AXSelected"] = False
+            return 0
+
+        action = Mock(side_effect=perform)
+        native = SimpleNamespace(
+            AXUIElementCopyAttributeValue=lambda e, name, unused: (0, e.get(name)),
+            AXUIElementCreateApplication=lambda pid: app,
+            AXUIElementPerformAction=action,
+        )
+        with patch.dict(sys.modules, {"ApplicationServices": native}):
+            rows = native_nodes(SimpleNamespace(pid=123), "File")
+        self.assertTrue(any(item.path == ("File", "Open...") for item, _ in rows))
+        action.assert_called_once_with(root["AXChildren"][0], "AXCancel")
+        self.assertFalse(root["AXSelected"])
+
     def test_menu_cancel(self):
         """Cancel the tracked menu once without addressing its closed parent."""
         from gvu.menus import _cancel_menu
@@ -58,6 +88,41 @@ class MenuTests(unittest.TestCase):
             action,
         )
         action.assert_not_called()
+
+    def test_dispatch_cancel(self):
+        """Never cancel into a dialog when its command already closed the menu."""
+        import sys
+        from unittest.mock import patch
+
+        from gvu.menus import invoke_native
+
+        for tracking in (False, True):
+            with self.subTest(tracking=tracking):
+                leaf = node("Open...")
+                root = menu("File", leaf, AXSelected=False)
+                child = root["AXChildren"][0]
+                rows = [
+                    (MenuItem(("File",), True, submenu=True), root),
+                    (MenuItem(("File", "Open..."), True), leaf),
+                ]
+
+                def perform(element, action, tracking=tracking, root=root, leaf=leaf):
+                    root["AXSelected"] = tracking if element is leaf else False
+                    return 0
+
+                action = Mock(side_effect=perform)
+                native = SimpleNamespace(
+                    AXUIElementCopyAttributeValue=lambda e, name, unused: (0, e.get(name)),
+                    AXUIElementPerformAction=action,
+                )
+                with patch.dict(sys.modules, {"ApplicationServices": native}), patch(
+                    "gvu.menus.native_nodes", return_value=rows
+                ):
+                    invoke_native(SimpleNamespace(), ("File", "Open..."))
+                expected = [((leaf, "AXPress"),)]
+                if tracking:
+                    expected.append(((child, "AXCancel"),))
+                self.assertEqual(action.call_args_list, expected)
 
     def test_cancel_error(self):
         """Report a failed native cancellation without falling back to keys."""
