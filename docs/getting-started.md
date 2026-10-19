@@ -43,12 +43,14 @@ Ignored checkpoints and cube grids may need to be obtained separately from the c
 
 ## Write a viewer
 
-Place this entry point beside your calculation or under its `scripts/` directory. Its inline dependency metadata installs GVU from PyPI, without a local source checkout.
+Place this entry point beside your calculation or under its `scripts/` directory. Its inline dependency metadata installs GVU from PyPI, without a local source checkout. `upgrade-package` checks for the latest published GVU release on every launch; future releases are picked up without editing each viewer.
 
 ```python
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["gvu>=0.3.0,<0.4"]
+# dependencies = ["gvu>=0.3.1"]
+# [tool.uv]
+# upgrade-package = ["gvu"]
 # ///
 from pathlib import Path
 from gvu import Alignment, Result, Workflow
